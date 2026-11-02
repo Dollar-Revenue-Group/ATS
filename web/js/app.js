@@ -185,7 +185,7 @@
       <div class="jobs">${shown.map(j => {
         const active = j.total - (j.byStage[7] || 0);
         return `<article class="card job" data-job="${j.id}" tabindex="0">
-          <div class="job-top"><div><h3>${esc(j.title)}</h3><div class="small muted" style="margin-top:4px">${esc(j.department || '')} · ${esc(j.location || '')}</div></div>
+          <div class="job-top"><div><h3>${esc(j.title)}${j.client ? ` <span class="chip ext" style="font-size:11px;vertical-align:middle">${esc(j.client)}</span>` : ''}</h3><div class="small muted" style="margin-top:4px">${esc(j.department || '')} · ${esc(j.location || '')}</div></div>
             <span class="chip st-${j.status}">${j.status.replace('_', ' ')}</span></div>
           <div><div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">Pipeline</span><span class="small num">${active} active</span></div>
             <div class="stagebar">${[1, 2, 3, 4, 8, 5, 6].map((s, k) => `<i style="width:${(j.byStage[s] || 0) / Math.max(1, active) * 100}%;background:${STAGE_COLORS[k]}" title="${stageName(s)}: ${j.byStage[s] || 0}"></i>`).join('')}</div></div>
@@ -198,7 +198,9 @@
     let team = [];
     try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { fail(e); }
     const m = modal(job ? 'Edit job' : 'New job', `
-      <div class="field"><label for="jt">Job title</label><input class="input" id="jt" required value="${esc(job?.title)}" placeholder="e.g. Sales Development Representative"></div>
+      <div class="grid2"><div class="field"><label for="jt">Job title</label><input class="input" id="jt" required value="${esc(job?.title)}" placeholder="e.g. Sales Development Representative"></div>
+        <div class="field"><label for="jc">Hiring for</label><input class="input" id="jc" value="${esc(job?.client)}" placeholder="Dollar Revenue Group" list="jclients"><datalist id="jclients"><option value="TechJays"></option></datalist>
+          <div class="small muted">Leave blank for DRG. A client name is added to every interview's calendar title, e.g. "SDR (TechJays) · Intro call · Priya".</div></div></div>
       <div class="grid2"><div class="field"><label for="jd2">Department</label><input class="input" id="jd2" value="${esc(job?.department)}" placeholder="Sales"></div>
         <div class="field"><label for="jl">Location</label><input class="input" id="jl" value="${esc(job?.location)}" placeholder="Ahmedabad · Hybrid"></div></div>
       <div class="grid2"><div class="field"><label for="je">Employment type</label><select class="input" id="je">${['Full-time', 'Part-time', 'Contract', 'Internship'].map(t => `<option ${job?.employment_type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
@@ -210,7 +212,7 @@
     const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [] }, team, true);
     $('#save', m.el).onclick = async () => {
       const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
-        employment_type: $('#je', m.el).value, openings: +$('#jo', m.el).value || 1, jd_text: $('#jx', m.el).value.trim() };
+        employment_type: $('#je', m.el).value, openings: +$('#jo', m.el).value || 1, jd_text: $('#jx', m.el).value.trim(), client: $('#jc', m.el).value.trim() || null };
       if (!d.title) return toast('Add a job title first.', true);
       const v = ed.value(); if (v.error) return toast(v.error, true);
       Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds });
@@ -229,7 +231,7 @@
     const canEdit = ['admin', 'recruiter'].includes(state.me.role);
     let tab = params.get('tab') || 'brief'; if (tab === 'rules') tab = 'brief';
     const careers = (CFG.CAREERS_URL || '').replace(/\/$/, '');
-    el.innerHTML = `<div class="page-head"><div><a href="#/jobs" class="small" style="text-decoration:none">← All jobs</a><h1 style="margin-top:6px">${esc(job.title)}</h1>
+    el.innerHTML = `<div class="page-head"><div><a href="#/jobs" class="small" style="text-decoration:none">← All jobs</a><h1 style="margin-top:6px">${esc(job.title)}${job.client ? ` <span class="chip ext" style="vertical-align:middle;font-size:13px">${esc(job.client)}</span>` : ''}</h1>
         <p>${esc(job.department || '')} · ${esc(job.location || '')} · ${esc(job.employment_type || '')} · ${job.openings} opening${job.openings > 1 ? 's' : ''}</p></div>
       <div class="row">${canEdit ? `<select class="input" id="status" style="width:auto" aria-label="Job status">${['draft', 'open', 'on_hold', 'closed'].map(s => `<option value="${s}" ${job.status === s ? 'selected' : ''}>${s === 'on_hold' ? 'On hold' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select>
         <button class="btn" id="edit">Edit</button>` : ''}${job.status === 'open' && job.slug ? `<a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Careers page ↗</a>` : ''}<a class="btn primary" href="#/pipeline/${job.id}">${icon('board', 16)}Open pipeline</a></div></div>
@@ -474,7 +476,11 @@
           else right = `<span class="small muted">Creating the link in ${esc(firstName(lead.full_name))}'s Cal.com…</span>`;
           return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;padding:10px 0;border-top:1px solid var(--line)"><span style="min-width:190px"><b>Round ${n}</b> · ${esc(rd.name || '')}<br><span class="small muted">${esc(lead ? lead.full_name : 'No interviewer yet')}</span></span><span class="row" style="gap:10px;flex-wrap:wrap;flex:1">${right}</span></div>`;
         }).join('');
+        const label = esc(job.title + (job.client ? ` (${job.client})` : ''));
+        const offCal = (job.rounds || []).map((rd, i) => ({ n: i + 1, t: team.find(x => x.id === rd.interviewer_id) })).filter(x => x.t && !x.t.cal_account);
         cal.innerHTML = `<div class="card-h"><div><h3>Cal.com booking links</h3><div class="small muted">Created automatically in the interviewer's Cal.com when you choose them for a round. Candidates moved into that round get the link with their name and email filled in, and bookings come back into the ATS.</div></div></div>
+          <div class="card-b" style="display:grid;gap:8px;padding-bottom:0"><div class="cal-title">${icon('cal', 15)}<span>Shows in calendars as <b>${label} · ${esc((job.rounds || [])[0]?.name || 'Intro call')} · Candidate name</b></span></div>
+            ${offCal.length ? `<div class="small" style="color:var(--review)">${offCal.map(x => `Round ${x.n}: ${esc(firstName(x.t.full_name))}`).join(', ')} ${offCal.length > 1 ? "aren't" : "isn't"} on Cal.com, so bookings through ${offCal.length > 1 ? 'their own booking pages' : 'their own booking page'} won't show the role in calendars. Connect Cal.com in Settings → Interview panel.</div>` : ''}</div>
           <div class="card-b">${rows || '<p class="small muted" style="margin:0">Set up the interview rounds above. Links are created as soon as each round has an interviewer.</p>'}</div>`;
         $$('[data-retry]', cal).forEach(b => b.onclick = () => { delete calState[+b.dataset.retry]; drawCal(); links(); });
       };

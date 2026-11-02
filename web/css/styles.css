@@ -410,3 +410,5 @@ details.card[open]>summary h3::before{content:'▾ '}
 .pill.ok{background:var(--accent-soft);color:var(--accent-strong);border-color:transparent}
 .pill.sm{padding:2px 8px;font-size:11px}
 @media (max-width:640px){.pm-grid{grid-template-columns:minmax(0,1fr)}.pm-tools select.input{max-width:none!important;width:100%}}
+.cal-title{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13px}
+.cal-title svg{flex:none;color:var(--accent-strong)}
