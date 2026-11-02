@@ -12,3 +12,4 @@ Static front end for the DRG applicant tracking system. Data lives in Supabase; 
 3. Open a pull request from `staging` to `main`, review, merge. Netlify publishes production.
 
 Database migrations and n8n workflow changes are not part of this repo; they apply to the live system immediately, so make them backward compatible before testing on staging.
+Staging site: https://staging--drg-ats.netlify.app
