@@ -212,6 +212,10 @@
       <div class="grid2"><div class="field"><label for="je">Employment type</label><select class="input" id="je">${['Full-time', 'Part-time', 'Contract', 'Internship'].map(t => `<option ${job?.employment_type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <div class="field"><label for="jo">Openings</label><input class="input" id="jo" type="number" min="1" value="${job?.openings || 1}"></div></div>
       <div class="field"><label for="jx">Job description</label><textarea class="input" id="jx" rows="7" placeholder="Paste the JD. Candidates see it on the careers site and the AI reads it when screening.">${esc(job?.jd_text)}</textarea></div>
+      <div class="modal-sec"><h3>Interview scoring</h3></div>
+      <div class="field"><div class="small muted">The points interviewers rate from 1 to 5 on a candidate's profile. Click to add or remove. Weights and the scoring formula are on the job's <b>Interview scoring</b> tab.</div>
+        <div class="row" id="jsc" style="gap:6px;margin-top:4px"></div>
+        <div class="row" style="gap:8px"><input class="input" id="jscn" placeholder="Add your own point, e.g. Objection handling" style="max-width:340px"><button type="button" class="btn sm" id="jsca">Add</button></div></div>
       <div class="modal-sec"><h3>Hiring panel and rounds</h3></div><div id="jpr" style="display:grid;gap:14px"></div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="save">${job ? 'Save changes' : 'Create job'}</button>`);
     m.el.querySelector('.modal').classList.add('wide');
@@ -225,6 +229,18 @@
     if (jc && sn && !job?.sender_id) jc.onchange = () => { const c = jc.value.trim().toLowerCase(); if (!c) return;
       const hits = senders.filter(x => x.from_email && (x.from_email.split('@')[1] || '').toLowerCase().startsWith(c.replace(/\s+/g, '')));
       if (hits.length === 1) { sn.value = hits[0].id; snNote(); } };
+    const scfg = scoringCfg(job); const crit = scfg.criteria.map(c => ({ ...c })); const crit0 = JSON.stringify(crit);
+    const drawCrit = () => { const on = crit.map(c => c.name.toLowerCase());
+      $('#jsc', m.el).innerHTML = crit.map((c, i) => `<button type="button" class="pick-chip on" data-cx="${i}" title="Remove">${esc(c.name)} ${icon('x', 12)}</button>`).join('')
+        + SCORE_PRESETS.filter(([n]) => !on.includes(n.toLowerCase())).map(([n]) => `<button type="button" class="pick-chip" data-cp="${esc(n)}">${icon('plus', 12)}${esc(n)}</button>`).join('');
+      $$('[data-cx]', m.el).forEach(b => b.onclick = () => { crit.splice(+b.dataset.cx, 1); drawCrit(); });
+      $$('[data-cp]', m.el).forEach(b => b.onclick = () => addCrit(b.dataset.cp)); };
+    const addCrit = name => { name = String(name || '').trim(); if (!name || crit.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+      const pre = SCORE_PRESETS.find(x => x[0].toLowerCase() === name.toLowerCase());
+      crit.push({ key: critKey(name, crit.map(c => c.key)), name, hint: pre ? pre[1] : '', weight: 1, min: 0 }); drawCrit(); };
+    drawCrit();
+    const jscn = $('#jscn', m.el); $('#jsca', m.el).onclick = () => { addCrit(jscn.value); jscn.value = ''; };
+    jscn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addCrit(jscn.value); jscn.value = ''; } };
     const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [], coord: job?.coordinator_ids || [] }, team, true);
     $('#save', m.el).onclick = async () => {
       const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
@@ -233,9 +249,11 @@
       if (!d.title) return toast('Add a job title first.', true);
       const v = ed.value(); if (v.error) return toast(v.error, true);
       Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds, coordinator_ids: v.coordinator_ids });
+      const critChanged = JSON.stringify(crit) !== crit0;
+      if (critChanged) d.interview_scoring = { ...(job?.interview_scoring || {}), criteria: crit, mode: scfg.mode, formula: scfg.formula, hire: scfg.hire, maybe: scfg.maybe };
       const btn = $('#save', m.el); btn.disabled = true;
       try { let saved;
-            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; m.close(); toast('Job updated'); route(); }
+            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; m.close(); toast('Job updated'); route(); if (critChanged) rescoreJob(saved, scoringCfg(saved)); }
             else { saved = await api.createJob(d); m.close(); toast('Job created. Now write the AI screening brief.'); location.hash = `#/jobs/${saved.id}?tab=brief`; }
             ensureCalLinks({ ...saved, rounds: d.rounds, cal_links: saved.cal_links || {} }, team).then(r => { const bad = r.filter(x => !x.ok);
               if (bad.length) toast(`Cal.com link for Round ${bad.map(x => x.n).join(', ')} wasn't created. Open the job's Panel and rounds tab to retry.`, true); }); }
@@ -252,7 +270,7 @@
         <p>${esc(job.department || '')} · ${esc(job.location || '')} · ${esc(job.employment_type || '')} · ${job.openings} opening${job.openings > 1 ? 's' : ''}</p></div>
       <div class="row">${canEdit ? `<select class="input" id="status" style="width:auto" aria-label="Job status">${['draft', 'open', 'on_hold', 'closed'].map(s => `<option value="${s}" ${job.status === s ? 'selected' : ''}>${s === 'on_hold' ? 'On hold' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select>
         <button class="btn" id="edit">Edit</button>` : ''}${(job.rounds || []).length ? `<button class="btn" id="jcopy" aria-haspopup="menu">${icon('cal', 16)}Copy booking link ▾</button>` : ''}${job.status === 'open' && job.slug ? `<a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Careers page ↗</a>` : ''}<a class="btn primary" href="#/pipeline/${job.id}">${icon('board', 16)}Open pipeline</a></div></div>
-      <div class="tabs" role="tablist">${[['brief', 'AI screening'], ['team', 'Panel and rounds'], ['form', 'Application form'], ['emails', 'Emails'], ['jd', 'Job description']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
+      <div class="tabs" role="tablist">${[['brief', 'AI screening'], ['team', 'Panel and rounds'], ['scoring', 'Interview scoring'], ['form', 'Application form'], ['emails', 'Emails'], ['jd', 'Job description']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
       <div id="tabbody"></div>`;
     $$('[data-tab]', el).forEach(b => b.onclick = () => location.hash = `#/jobs/${id}?tab=${b.dataset.tab}`);
     if (canEdit) {
@@ -263,6 +281,7 @@
     const body = $('#tabbody');
     if (tab === 'jd') { body.innerHTML = `<div class="card card-b jd">${esc(job.jd_text) || '<span class="muted">No description yet.</span>'}</div>`; return; }
     if (tab === 'team') return panelBuilder(body, job, canEdit);
+    if (tab === 'scoring') return scoringBuilder(body, job, canEdit);
     if (tab === 'form') return formBuilder(body, job, canEdit);
     if (tab === 'emails') return jobEmails(body, job, canEdit);
     rulesBuilder(body, job, canEdit);
@@ -577,7 +596,7 @@
     el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Blue cards</span> have an interview booked.</p></div>
       <div class="board-tools"><button class="btn sm" id="copylinks" aria-haspopup="menu">${icon('cal', 15)}Copy booking link ▾</button><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
         <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-        <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="new">Newest</button></div></div></div>
+        <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="iscore">Interview score</button><button data-s="new">Newest</button></div></div></div>
       <div class="board" id="board"></div>`;
     $('#jobsel').onchange = e => location.hash = `#/pipeline/${e.target.value}`;
     let team = []; try { team = await api.team(); } catch (e) { team = []; }
@@ -585,14 +604,15 @@
     const draw = async () => {
       let cards = await api.cards(jobId);
       if (filter !== 'all') cards = cards.filter(c => c.verdict === filter);
-      cards.sort(sort === 'score' ? (a, b) => (b.score ?? -1) - (a.score ?? -1) : (a, b) => b.created_at.localeCompare(a.created_at));
+      cards.sort(sort === 'score' ? (a, b) => (b.score ?? -1) - (a.score ?? -1) : sort === 'iscore' ? (a, b) => (b.iscore ?? -1) - (a.iscore ?? -1) || (b.score ?? -1) - (a.score ?? -1) : (a, b) => b.created_at.localeCompare(a.created_at));
+      const scfg = scoringCfg(job);
       const cols = STAGES.filter(s => !STAGE_ROUND[s.id] || STAGE_ROUND[s.id] <= Math.max(roundsN, 1) || cards.some(c => c.stage_id === s.id));
       $('#board').innerHTML = cols.map(s => { const list = cards.filter(c => c.stage_id === s.id);
         const rd = STAGE_ROUND[s.id] ? job?.rounds?.[STAGE_ROUND[s.id] - 1] : null;
         return `<section class="col" data-stage="${s.id}" aria-label="${s.name}"><div class="col-h"><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span><span class="row" style="gap:6px;flex-wrap:nowrap">${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
           <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="true" data-card="${c.id}" tabindex="0">
             <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div></div>
-            ${c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
+            ${c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
           </article>`).join('') || '<div class="small muted" style="padding:10px 4px">No one here yet</div>'}</div></section>`; }).join('');
       $$('[data-colcopy]').forEach(b => b.onclick = e => { e.stopPropagation(); const n = +b.dataset.colcopy; copyLink(roundLink(job, n, team)?.url, `Round ${n} booking link`); });
       $$('[data-card]').forEach(k => {
@@ -756,7 +776,7 @@
     document.addEventListener('keydown', esc_);
     s.addEventListener('click', e => { if (e.target === s || e.target.closest('[data-close]')) close(); });
     const render = async () => {
-      const a = await api.application(id);
+      const [a, iscores] = await Promise.all([api.application(id), api.interviewScores(id).catch(() => [])]);
       const c = a.candidates || {}; const sc = a.screening; const name = c.full_name || a.resumes?.file_name || 'New applicant';
       const canAct = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
       const card = { status: a.status, verdict: sc?.verdict };
@@ -773,6 +793,7 @@
           ${canAct ? `<div class="row" style="gap:8px">
             <select class="input" id="mv" style="width:auto" aria-label="Move to stage">${STAGES.filter(st => st.id !== 7 && (!STAGE_ROUND[st.id] || STAGE_ROUND[st.id] <= Math.max((a.jobs?.rounds || []).length, 1) || st.id === a.stage_id)).map(st => `<option value="${st.id}" ${st.id === a.stage_id ? 'selected' : ''}>${st.name}</option>`).join('')}</select>
             <button class="btn primary sm" id="sched">${icon('cal', 15)}Schedule interview</button>
+            <button class="btn sm" id="iscore">${icon('check', 15)}Interview scoring</button>
             ${STAGE_ROUND[a.stage_id] ? `<button class="btn sm" id="cplink" title="Copies this candidate's booking link with their name and email filled in">${icon('copy', 15)}Copy booking link</button>
               <button class="btn sm" id="rsend">${icon('mail', 15)}${(a.interviews || []).some(i => i.status === 'scheduled' && i.stage_id === a.stage_id) ? 'Resend confirmation' : 'Resend booking email'}</button>` : ''}
             <button class="btn sm" id="resume">${icon('file', 15)}Resume</button>
@@ -780,6 +801,7 @@
             ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}</div>` : ''}
         </div>
         <div class="drawer-b">
+          ${scoringCard(a, iscores)}
           ${failedMails.length && canAct ? `<div class="card card-b warn-box" style="display:grid;gap:8px"><b>${failedMails.length === 1 ? 'An email to this candidate could not be sent' : failedMails.length + ' emails to this candidate could not be sent'}</b>
             ${failedMails.map(m => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(mailName(m.template_key))} · ${new Date(m.sent_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
               ${m.template_key === 'interviewer_notice' ? '' : `<button class="btn sm" data-resend="${esc(m.template_key)}">Send again</button>`}</div>`).join('')}
@@ -831,7 +853,10 @@
       $('#resume', s).onclick = () => { if (!a.resumes?.storage_path) return toast('No resume file for this candidate.', true); viewFile({ path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }); };
       $('#rescr', s) && ($('#rescr', s).onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } });
       $('#rej', s) && ($('#rej', s).onclick = () => rejectFlow(id, () => { render(); state.redraw?.(); }));
-      $$('[data-score]', s).forEach(b => b.onclick = () => scorecardFlow(b.dataset.score, render));
+      $$('[data-score]', s).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.score);
+        scoringCfg(a.jobs).criteria.length ? scoringFlow(a, render, { interview: iv }) : scorecardFlow(b.dataset.score, render); });
+      $('#iscore', s).onclick = () => scoringFlow(a, render);
+      $$('[data-isedit]', s).forEach(b => b.onclick = () => scoringFlow(a, render, { existing: iscores.find(x => x.id === b.dataset.isedit) }));
     };
     try { await render(); } catch (e) { fail(e); close(); }
     let rt; const unsub = api.subscribe(() => { clearTimeout(rt); rt = setTimeout(() => { if (document.body.contains(s)) render().catch(() => {}); }, 300); });
@@ -911,6 +936,219 @@
     $('#go', m.el).onclick = async () => {
       if (!rating || !rec) return toast('Add a rating and a recommendation.', true);
       try { await api.scorecard(ivid, { rating, recommendation: rec, feedback: $('#fb', m.el).value.trim() }); m.close(); toast('Scorecard submitted'); after?.(); } catch (e) { fail(e); } };
+  }
+
+  /* ───────── interview scoring ───────── */
+  const SCORE_PRESETS = [['Attitude', 'Energy, ownership and how they handle pushback'], ['Experience with plays', 'How they have built and run outbound plays'],
+    ['Signal detection', 'Spotting buying signals and acting on them'], ['Communication', 'Clear, confident, listens well'], ['Role knowledge', 'Knows the job, the tools and the numbers'],
+    ['Coachability', 'Takes feedback and adjusts quickly'], ['Culture fit', 'Fits how the team works']];
+  const RATE_WORDS = ['', 'Poor', 'Weak', 'OK', 'Good', 'Excellent'];
+  const IVERDICT = { hire: ['Hire', 'var(--pass)'], maybe: ['Maybe', 'var(--review)'], no: ['No hire', 'var(--disq)'] };
+  const critKey = (name, taken) => { let k = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 28) || 'point';
+    if (/^\d/.test(k)) k = 'p_' + k; let n = k, i = 2; while (taken.includes(n)) n = `${k}_${i++}`; return n; };
+  function scoringCfg(job) { const c = job?.interview_scoring || {};
+    return { criteria: (c.criteria || []).map(x => ({ key: x.key, name: x.name || x.key, hint: x.hint || '', weight: x.weight > 0 ? +x.weight : 1, min: +x.min || 0 })),
+      mode: c.mode === 'formula' ? 'formula' : 'weighted', formula: c.formula || '', hire: c.hire ?? 70, maybe: c.maybe ?? 50 }; }
+
+  // Small safe calculator for custom formulas: numbers, criterion names, + - * / ( ) and min, max, avg, round
+  function evalFormula(expr, vars) {
+    const toks = []; const re = /\s*(\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|[-+*/(),])/y; let m, pos = 0; const src = String(expr || '').trim();
+    if (!src) throw new Error('Write a formula first.');
+    while (pos < src.length) { re.lastIndex = pos; m = re.exec(src); if (!m) throw new Error(`Can't read "${src.slice(pos).trim().slice(0, 12)}"`); toks.push(m[1]); pos = re.lastIndex; while (pos < src.length && src[pos] === ' ') pos++; }
+    let i = 0; const peek = () => toks[i], next = () => toks[i++];
+    const FN = { min: a => Math.min(...a), max: a => Math.max(...a), avg: a => a.reduce((t, x) => t + x, 0) / a.length, round: a => Math.round(a[0]) };
+    const expr_ = () => { let v = term(); while (peek() === '+' || peek() === '-') { const o = next(); const r = term(); v = o === '+' ? v + r : v - r; } return v; };
+    const term = () => { let v = factor(); while (peek() === '*' || peek() === '/') { const o = next(); const r = factor(); v = o === '*' ? v * r : (r === 0 ? 0 : v / r); } return v; };
+    const factor = () => { const t = next();
+      if (t === undefined) throw new Error('The formula ends too early.');
+      if (t === '-') return -factor();
+      if (t === '(') { const v = expr_(); if (next() !== ')') throw new Error('A bracket is not closed.'); return v; }
+      if (/^\d/.test(t)) return +t;
+      if (/^[A-Za-z_]/.test(t)) {
+        if (peek() === '(') { next(); const f = FN[t.toLowerCase()]; if (!f) throw new Error(`Unknown function "${t}". Use min, max, avg or round.`);
+          const args = [expr_()]; while (peek() === ',') { next(); args.push(expr_()); } if (next() !== ')') throw new Error('A bracket is not closed.'); return f(args); }
+        if (!(t in vars)) throw new Error(`"${t}" is not one of this job's criteria.`); return vars[t]; }
+      throw new Error(`Unexpected "${t}".`); };
+    const v = expr_(); if (i < toks.length) throw new Error(`Unexpected "${toks[i]}".`);
+    if (!isFinite(v)) throw new Error('The formula does not give a number.'); return v;
+  }
+  function computeScore(cfg, ratings) {
+    const cs = cfg.criteria; if (!cs.length) return { score: null, verdict: null, flags: [], missing: [] };
+    const missing = cs.filter(c => !(ratings[c.key] >= 1)).map(c => c.name);
+    if (missing.length) return { score: null, verdict: null, flags: [], missing };
+    let score;
+    if (cfg.mode === 'formula') { const vars = Object.fromEntries(cs.map(c => [c.key, +ratings[c.key]])); score = evalFormula(cfg.formula, vars); }
+    else { const tw = cs.reduce((t, c) => t + c.weight, 0) || 1; score = cs.reduce((t, c) => t + c.weight * ratings[c.key], 0) / tw / 5 * 100; }
+    score = Math.round(Math.max(0, Math.min(100, score)) * 10) / 10;
+    const flags = cs.filter(c => c.min && ratings[c.key] < c.min).map(c => c.name);
+    const verdict = flags.length ? 'no' : score >= cfg.hire ? 'hire' : score >= cfg.maybe ? 'maybe' : 'no';
+    return { score, verdict, flags, missing };
+  }
+  const ivVerdictOf = (cfg, score) => score == null ? null : score >= cfg.hire ? 'hire' : score >= cfg.maybe ? 'maybe' : 'no';
+  const iscoreBadge = (score, v, big, label) => score == null ? '' : `<span class="iscore${big ? ' big' : ''}" style="--c:${IVERDICT[v]?.[1] || 'var(--muted)'}" title="Interview score ${Math.round(score)}/100"><b>${Math.round(score)}</b>${big ? '<i>/100</i>' : ''}<span>${label ?? (big ? IVERDICT[v]?.[0] || '' : 'Interview')}</span></span>`;
+
+  async function rescoreJob(job, cfg) {
+    let rows = []; try { rows = await api.jobInterviewScores(job.id); } catch (e) { return; }
+    for (const r of rows) { let res; try { res = computeScore(cfg, r.ratings || {}); } catch (e) { continue; }
+      if (res.score != null && +r.score !== res.score) { try { await api.saveInterviewScore({ id: r.id, score: res.score, verdict: res.verdict }); } catch (e) { /* keep going */ } } }
+  }
+
+  // Job page → Interview scoring tab
+  function scoringBuilder(body, job, canEdit) {
+    const cfg = scoringCfg(job); const dis = canEdit ? '' : 'disabled';
+    let tryR = {}; let saveT, err = '';
+    const draw = () => {
+      const cs = cfg.criteria; const tw = cs.reduce((t, c) => t + c.weight, 0) || 1;
+      const used = cs.map(c => c.name.toLowerCase());
+      let res = { score: null }; err = '';
+      try { if (cfg.mode === 'formula' && cs.length) evalFormula(cfg.formula, Object.fromEntries(cs.map(c => [c.key, 3]))); res = computeScore(cfg, tryR); } catch (e) { err = e.message; }
+      body.innerHTML = `<div class="sc-wrap">
+        <div class="card"><div class="card-h"><div><h3>What interviewers score</h3><div class="small muted">Each point is rated 1 to 5 on the candidate's profile (<b>Interview scoring</b> button). Add the points that matter for this role.</div></div><span class="save-state" id="svst"></span></div>
+          <div class="card-b" style="display:grid;gap:12px">
+            ${cs.length ? `<div class="sc-head small muted"><span>Point</span><span>What good looks like</span><span>Weight</span><span>Must score at least</span><span></span></div>` : ''}
+            ${cs.map((c, i) => `<div class="sc-row" data-i="${i}">
+              <input class="input" data-f="name" value="${esc(c.name)}" aria-label="Point name" ${dis}>
+              <input class="input" data-f="hint" value="${esc(c.hint)}" placeholder="Optional guidance for the interviewer" aria-label="What good looks like" ${dis}>
+              <div class="sc-w"><input class="input" type="number" min="1" max="100" data-f="weight" value="${c.weight}" aria-label="Weight" ${dis} ${cfg.mode === 'formula' ? 'disabled title="Weights are set inside your custom formula"' : ''}><span class="small muted">${cfg.mode === 'formula' ? '' : Math.round(c.weight / tw * 100) + '%'}</span></div>
+              <select class="input" data-f="min" aria-label="Minimum" ${dis}>${[[0, 'No minimum'], [2, '2 or more'], [3, '3 or more'], [4, '4 or more']].map(([v, l]) => `<option value="${v}" ${c.min === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+              ${canEdit ? `<button class="x" data-del="${i}" aria-label="Remove ${esc(c.name)}" title="Remove">${icon('x', 16)}</button>` : '<span></span>'}
+              <code class="sc-key small muted">${esc(c.key)}</code></div>`).join('') || '<div class="small muted">No points yet. Pick from the suggestions below or add your own.</div>'}
+            ${canEdit ? `<div class="row" style="gap:6px">${SCORE_PRESETS.filter(([n]) => !used.includes(n.toLowerCase())).map(([n]) => `<button class="btn sm" data-pre="${esc(n)}">${icon('plus', 13)}${esc(n)}</button>`).join('')}</div>
+              <div class="row" style="gap:8px"><input class="input" id="scnew" placeholder="Add your own point, e.g. Objection handling" style="max-width:360px"><button class="btn sm primary" id="scadd">Add</button></div>` : ''}
+          </div></div>
+        <div class="card"><div class="card-h"><div><h3>How the final score is worked out</h3><div class="small muted">Every scorecard gets a score out of 100. If several people score the candidate, the profile shows the average.</div></div></div>
+          <div class="card-b" style="display:grid;gap:14px">
+            <div class="sc-modes">
+              <label class="sc-mode ${cfg.mode === 'weighted' ? 'on' : ''}"><input type="radio" name="scm" value="weighted" ${cfg.mode === 'weighted' ? 'checked' : ''} ${dis}><span><b>Weighted average</b><span class="small muted">Recommended. Each point counts by its weight. All 5s = 100.</span></span></label>
+              <label class="sc-mode ${cfg.mode === 'formula' ? 'on' : ''}"><input type="radio" name="scm" value="formula" ${cfg.mode === 'formula' ? 'checked' : ''} ${dis}><span><b>Custom formula</b><span class="small muted">Write your own logic using the point names.</span></span></label></div>
+            ${cfg.mode === 'formula' ? `<div class="field"><label for="scf">Formula (result out of 100)</label>
+              <textarea class="input mono" id="scf" rows="2" ${dis} placeholder="(attitude * 2 + experience_with_plays * 2 + signal_detection) / 25 * 100">${esc(cfg.formula)}</textarea>
+              <div class="row" style="gap:6px">${cs.map(c => `<button type="button" class="tag sc-ins" data-ins="${esc(c.key)}" ${dis}>${esc(c.key)}</button>`).join('')}<span class="small muted">+ − × ÷ ( ) and min( ), max( ), avg( ), round( ). Each point is a number from 1 to 5.</span></div>
+              <div class="small" style="color:var(--disq)" role="alert">${esc(err)}</div></div>` : ''}
+            <div class="grid2"><div class="field"><label for="sch">Hire when the score is at least</label><input class="input" type="number" id="sch" min="1" max="100" value="${cfg.hire}" ${dis}></div>
+              <div class="field"><label for="scy">Maybe when the score is at least</label><input class="input" type="number" id="scy" min="0" max="100" value="${cfg.maybe}" ${dis}></div></div>
+            <div class="small muted">Below the Maybe line is <b>No hire</b>. A point marked "must score at least" that is missed also makes it <b>No hire</b>, whatever the total.</div>
+          </div></div>
+        ${cs.length ? `<div class="card"><div class="card-h"><div><h3>Try it</h3><div class="small muted">Rate an imaginary candidate to check the formula gives the result you expect.</div></div>${res.score != null ? iscoreBadge(res.score, res.verdict, true) : ''}</div>
+          <div class="card-b sc-try">${cs.map(c => `<div class="sc-try-row"><span>${esc(c.name)}</span><div class="rate" role="group" aria-label="${esc(c.name)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-try="${c.key}" data-n="${n}" class="${tryR[c.key] === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>`).join('')}
+            ${res.flags?.length ? `<div class="small" style="color:var(--disq)">Below the minimum on ${esc(res.flags.join(', '))}</div>` : ''}${res.score == null && !err ? '<div class="small muted">Rate every point to see the score.</div>' : ''}</div></div>` : ''}
+      </div>`;
+      if (!canEdit) return;
+      const st = $('#svst', body);
+      // Redraw after the current event finishes (a change event can fire while the field is losing focus)
+      const save = (redraw = true) => { if (redraw) return void setTimeout(() => { draw(); persist(); }, 0); persist(); };
+      const persist = () => { const s2 = $('#svst', body); if (err && cfg.mode === 'formula') { s2.textContent = 'Not saved: fix the formula'; return; }
+        s2.textContent = 'Saving…'; clearTimeout(saveT);
+        saveT = setTimeout(async () => { const v = { criteria: cfg.criteria, mode: cfg.mode, formula: cfg.formula, hire: cfg.hire, maybe: cfg.maybe };
+          try { await api.updateJob(job.id, { interview_scoring: v }); job.interview_scoring = v; const x = $('#svst', body); if (x) x.textContent = 'All changes saved'; rescoreJob(job, cfg); }
+          catch (e) { const x = $('#svst', body); if (x) x.textContent = 'Not saved'; fail(e); } }, 700); };
+      $$('.sc-row', body).forEach(row => { const c = cfg.criteria[+row.dataset.i];
+        $$('[data-f]', row).forEach(inp => inp.onchange = () => { const f = inp.dataset.f;
+          if (f === 'name') { const v = inp.value.trim(); if (!v) { inp.value = c.name; return; } c.name = v; }
+          else if (f === 'hint') { c.hint = inp.value.trim(); return save(false); }
+          else if (f === 'weight') c.weight = Math.max(1, Math.min(100, +inp.value || 1));
+          else if (f === 'min') c.min = +inp.value;
+          save(); }); });
+      $$('[data-del]', body).forEach(b => b.onclick = () => { const c = cfg.criteria[+b.dataset.del];
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.classList.add('armed'); b.title = 'Click again to remove'; toast(`Click × again to remove "${c.name}". Scores already given for it stay in old scorecards.`); return; }
+        cfg.criteria.splice(+b.dataset.del, 1); delete tryR[c.key]; save(); });
+      const add = name => { name = String(name).trim(); if (!name) return; if (cfg.criteria.some(c => c.name.toLowerCase() === name.toLowerCase())) return toast('That point is already on the list.', true);
+        const pre = SCORE_PRESETS.find(p => p[0].toLowerCase() === name.toLowerCase());
+        cfg.criteria.push({ key: critKey(name, cfg.criteria.map(c => c.key)), name, hint: pre ? pre[1] : '', weight: 1, min: 0 }); save(); };
+      $$('[data-pre]', body).forEach(b => b.onclick = () => add(b.dataset.pre));
+      const nw = $('#scnew', body); $('#scadd', body).onclick = () => add(nw.value); nw.onkeydown = e => { if (e.key === 'Enter') add(nw.value); };
+      $$('input[name=scm]', body).forEach(r => r.onchange = () => { cfg.mode = r.value;
+        if (cfg.mode === 'formula' && !cfg.formula && cfg.criteria.length) { const tw = cfg.criteria.reduce((t, c) => t + c.weight, 0);
+          cfg.formula = `(${cfg.criteria.map(c => c.weight === 1 ? c.key : `${c.key} * ${c.weight}`).join(' + ')}) / ${tw * 5} * 100`; }
+        save(); });
+      const f = $('#scf', body); if (f) { f.onchange = () => { cfg.formula = f.value.trim(); save(); };
+        $$('[data-ins]', body).forEach(b => b.onclick = () => { const p = f.selectionStart ?? f.value.length; f.value = f.value.slice(0, p) + b.dataset.ins + f.value.slice(f.selectionEnd ?? p); cfg.formula = f.value.trim(); save(); }); }
+      $('#sch', body).onchange = e => { cfg.hire = Math.max(1, Math.min(100, +e.target.value || 70)); if (cfg.maybe > cfg.hire) cfg.maybe = cfg.hire; save(); };
+      $('#scy', body).onchange = e => { cfg.maybe = Math.max(0, Math.min(cfg.hire, +e.target.value || 0)); save(); };
+      $$('[data-try]', body).forEach(b => b.onclick = () => { tryR[b.dataset.try] = +b.dataset.n; const y = window.scrollY; draw(); window.scrollTo(0, y); });
+      if (st && !st.textContent) st.textContent = cfg.criteria.length ? 'Changes save automatically' : '';
+    };
+    draw();
+  }
+
+  // Candidate profile → Interview scoring
+  async function scoringFlow(a, after, opts = {}) {
+    const job = a.jobs || {}; const cfg = scoringCfg(job);
+    const canSetup = ['admin', 'recruiter'].includes(state.me.role);
+    if (!cfg.criteria.length) {
+      const m = modal('Interview scoring', `<p style="margin:0">This job has no scoring points yet. ${canSetup ? 'Add the points interviewers should rate (for example Attitude, Experience with plays, Signal detection) on the job\'s <b>Interview scoring</b> tab.' : 'Ask a recruiter to add them on the job\'s Interview scoring tab.'}</p>`,
+        `<button class="btn" data-close>Close</button>${canSetup ? '<button class="btn primary" id="gojob">Set up scoring</button>' : ''}`);
+      const g = $('#gojob', m.el); if (g) g.onclick = () => { m.close(); $$('.scrim').forEach(x => x.remove()); location.hash = `#/jobs/${job.id}?tab=scoring`; };
+      return;
+    }
+    let team = []; try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { team = []; }
+    const rounds = job.rounds || []; const nR = Math.max(rounds.length, 1);
+    const me = team.find(t => (t.email || '').toLowerCase() === (state.me.email || '').toLowerCase());
+    const ex = opts.existing || null;
+    const iv0 = opts.interview || null;
+    let rno = ex?.round_no || iv0?.round_no || STAGE_ROUND[iv0?.stage_id] || STAGE_ROUND[a.stage_id] || 1;
+    const leadOf = n => rounds[n - 1]?.interviewer_id || null;
+    let who = ex?.member_id || iv0?.team_member_id || me?.id || leadOf(rno) || team[0]?.id || '';
+    const ratings = { ...(ex?.ratings || {}) }; let rec = ex?.recommendation || null; let recTouched = !!ex?.recommendation;
+    const m = modal(`Interview scoring · ${a.candidates?.full_name || 'Candidate'}`, `
+      <div class="grid2"><div class="field"><label for="isr">Round</label><select class="input" id="isr">${Array.from({ length: nR }, (_, k) => k + 1).map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+        <div class="field"><label for="isw">Scored by</label><select class="input" id="isw">${team.map(t => `<option value="${t.id}" ${t.id === who ? 'selected' : ''}>${esc(t.full_name)}${t.company ? ' · ' + esc(t.company) : ''}</option>`).join('')}<option value="" ${!who ? 'selected' : ''}>${esc(state.me.full_name || 'Me')}</option></select></div></div>
+      <div class="is-list">${cfg.criteria.map(c => `<div class="is-row"><div class="is-name"><b>${esc(c.name)}</b>${c.min ? `<span class="tag">needs ${c.min}+</span>` : ''}${cfg.mode === 'weighted' ? `<span class="small muted">${Math.round(c.weight / cfg.criteria.reduce((t, x) => t + x.weight, 0) * 100)}%</span>` : ''}${c.hint ? `<span class="small muted" style="display:block">${esc(c.hint)}</span>` : ''}</div>
+        <div class="rate" role="radiogroup" aria-label="${esc(c.name)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" data-k="${c.key}" data-n="${n}" title="${RATE_WORDS[n]}"><b>${n}</b><span>${RATE_WORDS[n]}</span></button>`).join('')}</div></div>`).join('')}</div>
+      <div class="field"><label for="isn">Notes</label><textarea class="input" id="isn" rows="3" placeholder="Why these scores? Strengths, concerns, anything the next interviewer should probe.">${esc(ex?.notes || '')}</textarea></div>
+      <div class="field"><label>Your recommendation</label><div class="seg" id="isrec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+      <div class="is-result" id="isres" aria-live="polite"></div>`,
+      `${ex ? '<button class="btn danger" id="isdel" style="margin-right:auto">Delete</button>' : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">${ex ? 'Save changes' : 'Save score'}</button>`);
+    m.el.querySelector('.modal').classList.add('wide');
+    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? null : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
+    const paint = () => { let r; try { r = computeScore(cfg, ratings); } catch (e) { r = { score: null, err: e.message, flags: [], missing: [] }; }
+      $$('[data-k]', m.el).forEach(b => { const on = ratings[b.dataset.k] === +b.dataset.n; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+      if (!recTouched) rec = recFor(r);
+      $$('[data-r]', m.el).forEach(b => b.classList.toggle('on', b.dataset.r === rec));
+      $('#isres', m.el).innerHTML = r.err ? `<span class="small" style="color:var(--disq)">The job's scoring formula has a problem: ${esc(r.err)}</span>`
+        : r.score == null ? `<span class="small muted">Rate ${r.missing.length === cfg.criteria.length ? 'each point' : r.missing.length + ' more point' + (r.missing.length > 1 ? 's' : '')} to see the final score.</span>`
+        : `${iscoreBadge(r.score, r.verdict, true)}<span class="small">${r.flags.length ? `<b style="color:var(--disq)">No hire:</b> below the minimum on ${esc(r.flags.join(', '))}.` : `Hire at ${cfg.hire}+, Maybe at ${cfg.maybe}+.`}</span>`;
+      return r; };
+    $$('[data-k]', m.el).forEach(b => b.onclick = () => { ratings[b.dataset.k] = +b.dataset.n; paint(); });
+    $$('[data-r]', m.el).forEach(b => b.onclick = () => { rec = rec === b.dataset.r ? null : b.dataset.r; recTouched = true; paint(); });
+    $('#isr', m.el).onchange = e => { rno = +e.target.value; if (!ex && !iv0 && !me && leadOf(rno)) $('#isw', m.el).value = leadOf(rno); };
+    paint();
+    const del = $('#isdel', m.el);
+    if (del) del.onclick = async () => { if (del.dataset.armed !== '1') { del.dataset.armed = '1'; del.textContent = 'Click again to delete'; return; }
+      try { await api.deleteInterviewScore(ex.id); m.close(); toast('Scorecard deleted'); after?.(); } catch (e) { fail(e); } };
+    $('#go', m.el).onclick = async () => {
+      const r = paint(); if (r.err) return toast('Fix the scoring formula on the job first.', true);
+      if (r.score == null) return toast(`Rate every point first: ${r.missing.join(', ')}.`, true);
+      const go = $('#go', m.el); go.disabled = true;
+      const wid = $('#isw', m.el).value; const wm = team.find(t => t.id === wid);
+      const iv = iv0 || [...(a.interviews || [])].reverse().find(i => (i.round_no || STAGE_ROUND[i.stage_id]) === rno && i.status !== 'cancelled');
+      const notes = $('#isn', m.el).value.trim();
+      try {
+        await api.saveInterviewScore({ ...(ex ? { id: ex.id } : {}), application_id: a.id, job_id: job.id || a.job_id, interview_id: iv?.id || null, round_no: rno,
+          member_id: wid || null, scorer_name: wm?.full_name || state.me.full_name || null, ratings, notes: notes || null, score: r.score, verdict: r.verdict, recommendation: rec });
+        if (iv && iv.status === 'scheduled') { const vals = Object.values(ratings); const avg = Math.round(vals.reduce((t, x) => t + x, 0) / vals.length);
+          try { await api.scorecard(iv.id, { rating: Math.max(1, Math.min(5, avg)), recommendation: rec || recFor(r) || 'no', feedback: [`Interview score ${Math.round(r.score)}/100 (${IVERDICT[r.verdict][0]})`, notes].filter(Boolean).join('\n\n') }); } catch (e) { /* the score itself is saved */ } }
+        m.close(); toast(`Score saved: ${Math.round(r.score)}/100 · ${IVERDICT[r.verdict][0]}`); after?.(); state.redraw?.();
+      } catch (e) { go.disabled = false; fail(e); }
+    };
+  }
+
+  // The summary card at the top of the candidate profile
+  function scoringCard(a, scores) {
+    const cfg = scoringCfg(a.jobs); const xs = scores.filter(x => x.score != null);
+    if (!xs.length) return cfg.criteria.length ? `<div class="card card-b is-empty row" style="gap:10px">${icon('check', 16)}<span class="grow small">No interview scores yet. Click <b>Interview scoring</b> above after an interview to rate ${cfg.criteria.map(c => esc(c.name)).slice(0, 3).join(', ')}${cfg.criteria.length > 3 ? '…' : ''}.</span></div>` : '';
+    const avg = xs.reduce((t, x) => t + +x.score, 0) / xs.length; const v = xs.some(x => x.verdict === 'no' && (x.ratings && cfg.criteria.some(c => c.min && x.ratings[c.key] < c.min))) ? 'no' : ivVerdictOf(cfg, avg);
+    const crit = [...cfg.criteria, ...[...new Set(xs.flatMap(x => Object.keys(x.ratings || {})))].filter(k => !cfg.criteria.some(c => c.key === k)).map(k => ({ key: k, name: k.replace(/_/g, ' '), old: true }))];
+    const mine = x => x.scored_by === state.me.id || ['admin', 'recruiter'].includes(state.me.role);
+    return `<div class="card is-card" style="border-left:3px solid ${IVERDICT[v][1]}"><div class="card-h"><div class="row" style="gap:12px">${iscoreBadge(avg, v, true)}<div><h3>Interview score</h3><div class="small muted">${xs.length === 1 ? 'From 1 scorecard' : `Average of ${xs.length} scorecards`} · ${cfg.mode === 'formula' ? 'custom formula' : 'weighted average'}</div></div></div></div>
+      <div class="card-b" style="display:grid;gap:14px">
+        <div class="is-bars">${crit.map(c => { const vals = xs.map(x => +(x.ratings || {})[c.key]).filter(n => n >= 1); if (!vals.length) return '';
+          const av = vals.reduce((t, n) => t + n, 0) / vals.length;
+          return `<div class="fbar"><div class="row" style="justify-content:space-between"><b>${esc(c.name)}${c.old ? ' <span class="small muted">(removed)</span>' : ''}</b><span class="num small">${av.toFixed(1)}/5</span></div><div class="tr"><i style="width:${av * 20}%;background:${av >= 4 ? 'var(--pass)' : av >= 3 ? 'var(--review)' : 'var(--low)'}"></i></div></div>`; }).join('')}</div>
+        <div class="list is-each">${scores.map(x => `<div class="li" style="cursor:default"><div class="grow"><b>${esc(x.scorer_name || 'Interviewer')}</b><div class="small muted">Round ${x.round_no || '–'} · ${fmtDate(x.updated_at || x.created_at)}${x.recommendation ? ' · Recommends: ' + x.recommendation.replace('_', ' ') : ''}</div>
+            <div class="small muted">${crit.filter(c => (x.ratings || {})[c.key]).map(c => `${esc(c.name)} ${x.ratings[c.key]}`).join(' · ')}</div>${x.notes ? `<div class="quote">${esc(x.notes)}</div>` : ''}</div>
+          ${iscoreBadge(x.score, x.verdict, false, IVERDICT[x.verdict]?.[0] || '')}${mine(x) ? `<button class="btn sm" data-isedit="${x.id}">Edit</button>` : ''}</div>`).join('')}</div>
+      </div></div>`;
   }
 
   /* ───────── upload ───────── */
@@ -1035,7 +1273,9 @@
           || `<div class="card empty">${view === 'score' ? 'All caught up: every finished interview has a scorecard.' : view === 'done' ? 'No finished interviews yet.' : view === 'today' ? 'No interviews today.' : 'No upcoming interviews. Move a candidate into a round and they get a link to book.'}</div>`}</div>`;
       $$('[data-view]', el).forEach(b => b.onclick = () => { view = b.dataset.view; draw(); });
       const ws = $('#ivwho', el); if (ws) ws.onchange = () => { who = ws.value; draw(); };
-      $$('[data-score]', el).forEach(b => b.onclick = e => { e.stopPropagation(); scorecardFlow(b.dataset.score, () => route()); });
+      $$('[data-score]', el).forEach(b => b.onclick = async e => { e.stopPropagation(); const aid = b.closest('[data-app]')?.dataset.app;
+        if (aid) { try { const a = await api.application(aid); if (scoringCfg(a.jobs).criteria.length) return scoringFlow(a, () => route(), { interview: a.interviews.find(i => i.id === b.dataset.score) }); } catch (er) { /* fall back */ } }
+        scorecardFlow(b.dataset.score, () => route()); });
       $$('[data-stop]', el).forEach(b => b.onclick = e => e.stopPropagation());
       $$('[data-open]', el).forEach(b => b.onclick = e => { e.stopPropagation(); openCandidate(b.dataset.open); });
       if (!mine) $$('.iv-card[data-app]', el).forEach(k => { k.onclick = () => openCandidate(k.dataset.app); k.onkeydown = e => e.key === 'Enter' && openCandidate(k.dataset.app); });
@@ -1311,6 +1551,16 @@
     };
     setTimeout(() => $('#ck', m.el)?.focus(), 50);
   }
+
+  // People with a non-DRG email are outside DRG; their company comes from the domain unless typed in
+  const DRG_DOMAINS = ['dollarrevenuegroup.com'];
+  const KNOWN_COMPANIES = { 'techjays.com': 'TechJays', 'gomarketpros.com': 'GoMarketPros' };
+  function companyFromEmail(email) {
+    const dom = String(email || '').toLowerCase().split('@')[1] || '';
+    if (!dom || DRG_DOMAINS.includes(dom) || /^(gmail|googlemail|outlook|hotmail|yahoo|icloud|proton(mail)?)\./.test(dom)) return null;
+    if (KNOWN_COMPANIES[dom]) return KNOWN_COMPANIES[dom];
+    const base = dom.split('.')[0]; return base ? base.charAt(0).toUpperCase() + base.slice(1) : null;
+  }
   function memberForm(t, after) {
     const av = t?.availability || { slot: 30, days: { 1: [['10:00', '18:00']], 2: [['10:00', '18:00']], 3: [['10:00', '18:00']], 4: [['10:00', '18:00']], 5: [['10:00', '18:00']] } };
     const on = Object.keys(av.days || {}).filter(k => (av.days[k] || []).length).map(Number);
@@ -1319,6 +1569,9 @@
     const m = modal(t ? 'Edit interviewer' : 'Add interviewer', `
       <div class="grid2"><div class="field"><label for="mn">Full name</label><input class="input" id="mn" value="${esc(t?.full_name)}"></div>
         <div class="field"><label for="me">Email</label><input class="input" id="me" type="email" value="${esc(t?.email)}"></div></div>
+      <div class="grid2"><div class="field"><label for="mco">Company</label><input class="input" id="mco" value="${esc(t?.company || '')}" placeholder="Dollar Revenue Group" list="mcos"><datalist id="mcos"><option value="TechJays"></option></datalist>
+          <div class="small muted" id="mcoh">Leave blank for DRG staff. Anyone from another company shows as <b>Outside DRG</b>.</div></div>
+        <label class="row small" style="gap:8px;align-self:end;padding-bottom:12px"><input type="checkbox" id="msnd"> Also add as an email sender (jobs can send candidate emails from this address)</label></div>
       <div class="grid2"><div class="field"><label for="mt">Job title</label><input class="input" id="mt" value="${esc(t?.title)}" placeholder="e.g. Head of Sales"></div>
         <div class="field"><label for="mz">Time zone</label><select class="input" id="mz">${tzs.map(z => `<option ${z === (t?.timezone || 'Asia/Kolkata') ? 'selected' : ''}>${z}</option>`).join('')}</select></div></div>
       <div class="field"><label>Days available for interviews</label><div class="seg" id="md">${DAYS.map(([k, l]) => `<button type="button" data-d="${k}" class="${on.includes(k) ? 'on' : ''}">${l}</button>`).join('')}</div></div>
@@ -1338,9 +1591,15 @@
       if (!Object.keys(days).length) return toast('Pick at least one day.', true);
       const link = $('#ml', m.el).value.trim(), book = $('#mb', m.el).value.trim();
       if ([link, book].some(u => u && !/^https:\/\//i.test(u))) return toast('Links must start with https://', true);
-      try { await api.saveMember({ ...(t ? { id: t.id } : {}), full_name: name, email, title: $('#mt', m.el).value.trim() || null, timezone: $('#mz', m.el).value,
+      const company = $('#mco', m.el).value.trim() || companyFromEmail(email);
+      try { await api.saveMember({ ...(t ? { id: t.id } : {}), full_name: name, email, company, title: $('#mt', m.el).value.trim() || null, timezone: $('#mz', m.el).value,
           availability: { slot: +$('#ms', m.el).value, days }, meeting_link: link || null, booking_url: book || null, ...(t ? { active: $('#ma', m.el).checked } : {}) });
+        if ($('#msnd', m.el).checked) { try { await api.saveSender({ from_name: company ? `${name.split(' ')[0]} · ${company}` : name, from_email: email, active: true }); toast(`${email} added as an email sender`); }
+          catch (er) { toast(/duplicate|unique/i.test(er.message) ? `${email} is already an email sender` : 'Saved, but the sender could not be added: ' + er.message, true); } }
         m.close(); toast(t ? 'Saved' : 'Added to the interview panel'); after?.(); } catch (e) { fail(/duplicate/i.test(e.message) ? new Error('Someone with this email is already on the panel.') : e); } };
+    // Suggest the company from the email domain (techjays.com → TechJays)
+    const me_ = $('#me', m.el), mco = $('#mco', m.el);
+    me_.addEventListener('change', () => { if (!mco.value.trim()) { const c = companyFromEmail(me_.value.trim()); if (c) mco.value = c; } });
   }
 
   async function settings(el, _a, params) {

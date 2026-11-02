@@ -111,7 +111,7 @@
       async application(id) {
         // All five reads run in parallel so the candidate drawer opens in one round trip
         const [appRes, scr, ivs, act, mails] = await Promise.all([
-          sb.from('applications').select('*, jobs(id,title,client,rounds,cal_links), candidates(*), resumes(id,file_name,storage_path,uploaded_at)').eq('id', id).single(),
+          sb.from('applications').select('*, jobs(id,title,client,rounds,cal_links,interview_scoring), candidates(*), resumes(id,file_name,storage_path,uploaded_at)').eq('id', id).single(),
           sb.from('ai_screenings').select('*').eq('application_id', id).order('created_at', { ascending: false }).limit(1),
           sb.from('interviews').select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email)').eq('application_id', id).order('scheduled_at'),
           sb.from('activity_log').select('*').eq('application_id', id).order('created_at', { ascending: false }),
@@ -192,6 +192,14 @@
         return ok(await sb.from('job_email_templates').upsert({ job_id: jobId, key, ...d, updated_at: new Date().toISOString() }, { onConflict: 'job_id,key' }).select().single());
       },
       async resetJobTemplate(jobId, key) { ok(await sb.from('job_email_templates').delete().eq('job_id', jobId).eq('key', key)); },
+      async interviewScores(appId) { return ok(await sb.from('interview_scores').select('*').eq('application_id', appId).order('created_at')); },
+      async jobInterviewScores(jobId) { return ok(await sb.from('interview_scores').select('id,ratings,score').eq('job_id', jobId)); },
+      async saveInterviewScore(r) {
+        const { id, ...d } = r; d.updated_at = new Date().toISOString();
+        return id ? ok(await sb.from('interview_scores').update(d).eq('id', id).select().single())
+                  : ok(await sb.from('interview_scores').insert(d).select().single());
+      },
+      async deleteInterviewScore(id) { ok(await sb.from('interview_scores').delete().eq('id', id)); },
       async templates() { return ok(await sb.from('email_templates').select('*').order('sort').order('key')); },
       async saveTemplate(key, subject, body, enabled) {
         const d = { updated_at: new Date().toISOString() };
@@ -258,7 +266,7 @@
     });
     const jobs = [
       { id: 'j1', title: 'Sales Development Representative', department: 'Sales', location: 'Ahmedabad · Hybrid', employment_type: 'Full-time', status: 'open', openings: 2, hiring_manager_id: 'u3', created_at: iso(now - 21 * day),
-        jd_text: 'We are hiring an SDR to open conversations with B2B decision makers for our clients.\n\nWhat you will do\n• Run outbound calls, email and LinkedIn sequences\n• Book qualified meetings for Account Executives\n• Keep HubSpot clean and up to date\n\nWhat you bring\n• 2+ years in B2B sales or SDR roles\n• Comfort with daily cold calling\n• Clear written English', rules: { id: 'r1', version: 3, ...sdrRules } },
+        jd_text: 'We are hiring an SDR to open conversations with B2B decision makers for our clients.\n\nWhat you will do\n• Run outbound calls, email and LinkedIn sequences\n• Book qualified meetings for Account Executives\n• Keep HubSpot clean and up to date\n\nWhat you bring\n• 2+ years in B2B sales or SDR roles\n• Comfort with daily cold calling\n• Clear written English', rules: { id: 'r1', version: 3, ...sdrRules }, interview_scoring: { criteria: [{ key: 'attitude', name: 'Attitude', hint: 'Energy, ownership and how they handle pushback', weight: 2, min: 3 }, { key: 'experience_with_plays', name: 'Experience with plays', hint: 'How they have built and run outbound plays', weight: 2, min: 0 }, { key: 'signal_detection', name: 'Signal detection', hint: 'Spotting buying signals and acting on them', weight: 1, min: 0 }], mode: 'weighted', formula: '', hire: 70, maybe: 50 } },
       { id: 'j2', title: 'Account Executive', department: 'Sales', location: 'Remote · India', employment_type: 'Full-time', status: 'open', openings: 1, hiring_manager_id: 'u3', created_at: iso(now - 14 * day),
         jd_text: 'Own the full sales cycle for mid-market SaaS deals, from discovery to close.', rules: { id: 'r2', version: 1, ...genericRules('3+ years closing B2B deals', 'Closing record with numbers', 'Mid-market SaaS experience', 'Discovery and demo skills') } },
       { id: 'j3', title: 'Marketing Operations Specialist', department: 'Marketing', location: 'Ahmedabad', employment_type: 'Full-time', status: 'open', openings: 1, hiring_manager_id: 'u3', created_at: iso(now - 9 * day),
@@ -278,7 +286,7 @@
       review: ['Some outbound work, but mostly inbound follow-up.', 'Mentions targets but gives no figures.', 'Adjacent industry (fintech).', 'Clear, though long.'],
       low_fit: ['Little evidence of outbound prospecting.', 'No targets mentioned.', 'Retail background.', 'Several unclear sections.']
     };
-    const candidates = [], applications = [], screenings = [], resumes = [], activity = [], emails = [], interviews = [];
+    const candidates = [], applications = [], screenings = [], resumes = [], activity = [], emails = [], interviews = []; const iscores = [];
     plan.forEach(([jobId, stage, score, verdict], i) => {
       const n = names[i]; const created = now - (20 - i * 0.8) * day;
       const cid = `c${i}`, aid = `a${i}`, rid = `rs${i}`;
@@ -345,6 +353,7 @@
       return { id: a.id, job_id: a.job_id, stage_id: a.stage_id, status: a.status, created_at: a.created_at, updated_at: a.updated_at, candidate_id: a.candidate_id,
         full_name: c.full_name || (r.file_name || 'New applicant').replace(/\.(pdf|docx)$/i, '').replace(/[_-]+/g, ' '), email: c.email, total_exp_years: c.total_exp_years, source: c.source, file_name: r.file_name,
         score: s.score ?? null, verdict: s.verdict ?? null, summary: s.summary ?? null,
+        ...(() => { const xs = iscores.filter(x => x.application_id === a.id && x.score != null); return xs.length ? { iscore: Math.round(xs.reduce((t, x) => t + +x.score, 0) / xs.length), iscore_n: xs.length } : {}; })(),
         ...(() => { const iv = interviews.filter(i => i.application_id === a.id && i.status === 'scheduled' && i.stage_id === a.stage_id).sort((p, q) => p.scheduled_at.localeCompare(q.scheduled_at))[0];
           return iv ? { interview_at: iv.scheduled_at, interview_stage: iv.stage_id, interviewer_name: (people.find(p => p.id === iv.interviewer_id) || {}).full_name || null } : {}; })() };
     };
@@ -385,7 +394,7 @@
       async application(aid) {
         await wait();
         const a = applications.find(x => x.id === aid); const job = jobs.find(j => j.id === a.job_id);
-        return { ...a, jobs: { id: job.id, title: job.title }, candidates: candidates.find(c => c.id === a.candidate_id), resumes: resumes.find(r => r.id === a.resume_id),
+        return { ...a, jobs: { id: job.id, title: job.title, client: job.client, rounds: job.rounds, cal_links: job.cal_links, interview_scoring: job.interview_scoring }, candidates: candidates.find(c => c.id === a.candidate_id), resumes: resumes.find(r => r.id === a.resume_id),
           screening: screenings.filter(s => s.application_id === aid).sort((p, q) => q.created_at.localeCompare(p.created_at))[0] || null,
           interviews: interviews.filter(i => i.application_id === aid).map(i => ({ ...i, interviewer: people.find(p => p.id === i.interviewer_id) })),
           activity: activity.filter(x => x.application_id === aid).sort((p, q) => q.created_at.localeCompare(p.created_at)),
@@ -441,6 +450,10 @@
       async jobTemplates(jobId) { return jobTpls.filter(t => t.job_id === jobId); },
       async saveJobTemplate(jobId, key, dd) { let t = jobTpls.find(x => x.job_id === jobId && x.key === key); if (!t) { t = { job_id: jobId, key }; jobTpls.push(t); } Object.assign(t, dd); return t; },
       async resetJobTemplate(jobId, key) { const i = jobTpls.findIndex(x => x.job_id === jobId && x.key === key); if (i >= 0) jobTpls.splice(i, 1); },
+      async interviewScores(aid) { return iscores.filter(x => x.application_id === aid); },
+      async jobInterviewScores(jid) { return iscores.filter(x => x.job_id === jid); },
+      async saveInterviewScore(r) { let x = r.id && iscores.find(y => y.id === r.id); if (!x) { x = { id: id('isc'), scored_by: people[0].id, created_at: new Date().toISOString() }; iscores.push(x); } Object.assign(x, r, { updated_at: new Date().toISOString() }); emit(); return x; },
+      async deleteInterviewScore(sid) { const i = iscores.findIndex(x => x.id === sid); if (i >= 0) iscores.splice(i, 1); emit(); },
       async saveTemplate(key, subject, body, enabled) { const t = templates.find(x => x.key === key); if (subject != null) t.subject = subject; if (body != null) t.body = body; if (typeof enabled === 'boolean') t.enabled = enabled; },
       async settings() { return settings; },
       async saveSetting(key, value) { settings.find(s => s.key === key).value = value; },
