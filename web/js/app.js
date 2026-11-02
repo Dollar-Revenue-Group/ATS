@@ -197,12 +197,16 @@
     if (canEdit) $('#newjob').onclick = () => jobForm();
   }
   async function jobForm(job) {
-    let team = [];
+    let team = [], senders = [];
     try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { fail(e); }
+    try { senders = (await api.senders()).filter(x => x.active !== false || x.id === job?.sender_id); } catch (e) { senders = []; }
+    const defSender = senders.find(x => x.is_default);
     const m = modal(job ? 'Edit job' : 'New job', `
-      <div class="grid2"><div class="field"><label for="jt">Job title</label><input class="input" id="jt" required value="${esc(job?.title)}" placeholder="e.g. Sales Development Representative"></div>
+      <div class="grid2" style="align-items:start"><div class="field"><label for="jt">Job title</label><input class="input" id="jt" required value="${esc(job?.title)}" placeholder="e.g. Sales Development Representative"></div>
         <div class="field"><label for="jc">Hiring for</label><input class="input" id="jc" value="${esc(job?.client)}" placeholder="Dollar Revenue Group" list="jclients"><datalist id="jclients"><option value="TechJays"></option></datalist>
           <div class="small muted">Leave blank for DRG. A client name is added to every interview's calendar title, e.g. "SDR (TechJays) · Intro call · Priya".</div></div></div>
+      ${senders.length ? `<div class="field"><label for="jsn">Send candidate emails from</label><select class="input" id="jsn">${senders.map(x => `<option value="${x.id}" ${x.id === (job?.sender_id || defSender?.id) ? 'selected' : ''}>${esc(senderLabel(x))}</option>`).join('')}</select>
+        <div class="small muted" id="jsnh"></div></div>` : ''}
       <div class="grid2"><div class="field"><label for="jd2">Department</label><input class="input" id="jd2" value="${esc(job?.department)}" placeholder="Sales"></div>
         <div class="field"><label for="jl">Location</label><input class="input" id="jl" value="${esc(job?.location)}" placeholder="Ahmedabad · Hybrid"></div></div>
       <div class="grid2"><div class="field"><label for="je">Employment type</label><select class="input" id="je">${['Full-time', 'Part-time', 'Contract', 'Internship'].map(t => `<option ${job?.employment_type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
@@ -211,10 +215,21 @@
       <div class="modal-sec"><h3>Hiring panel and rounds</h3></div><div id="jpr" style="display:grid;gap:14px"></div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="save">${job ? 'Save changes' : 'Create job'}</button>`);
     m.el.querySelector('.modal').classList.add('wide');
+    const sn = $('#jsn', m.el), snh = $('#jsnh', m.el);
+    const snNote = () => { if (!sn) return; const x = senders.find(y => y.id === sn.value) || defSender || {};
+      snh.innerHTML = x.from_email ? `Candidates see <b>${esc(x.from_name)}</b> &lt;${esc(x.from_email)}&gt;. Every email for this job (applied, rounds, confirmations, reminders) comes from here. You can also change it, and each email's wording, on the job's Emails tab.`
+        : `Candidates see <b>${esc(x.from_name || 'DRG Talent Team')}</b> from the DRG hiring mailbox.`; };
+    if (sn) { sn.onchange = snNote; snNote(); }
+    const jc = $('#jc', m.el);
+    // Typing a client name picks that client's sender if there is exactly one match (e.g. TechJays → zaina@techjays.com)
+    if (jc && sn && !job?.sender_id) jc.onchange = () => { const c = jc.value.trim().toLowerCase(); if (!c) return;
+      const hits = senders.filter(x => x.from_email && (x.from_email.split('@')[1] || '').toLowerCase().startsWith(c.replace(/\s+/g, '')));
+      if (hits.length === 1) { sn.value = hits[0].id; snNote(); } };
     const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [], coord: job?.coordinator_ids || [] }, team, true);
     $('#save', m.el).onclick = async () => {
       const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
         employment_type: $('#je', m.el).value, openings: +$('#jo', m.el).value || 1, jd_text: $('#jx', m.el).value.trim(), client: $('#jc', m.el).value.trim() || null };
+      const sn = $('#jsn', m.el); if (sn) d.sender_id = sn.value && sn.value !== defSender?.id ? sn.value : null;
       if (!d.title) return toast('Add a job title first.', true);
       const v = ed.value(); if (v.error) return toast(v.error, true);
       Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds, coordinator_ids: v.coordinator_ids });
