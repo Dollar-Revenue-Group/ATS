@@ -49,7 +49,7 @@
     plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     trash: '<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/>', file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
     spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
-    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>', refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>', check: '<path d="M5 12l5 5 9-10"/>'
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>', copy: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/>', refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>', check: '<path d="M5 12l5 5 9-10"/>'
   };
   const icon = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
 
@@ -234,7 +234,7 @@
     el.innerHTML = `<div class="page-head"><div><a href="#/jobs" class="small" style="text-decoration:none">← All jobs</a><h1 style="margin-top:6px">${esc(job.title)}${job.client ? ` <span class="chip ext" style="vertical-align:middle;font-size:13px">${esc(job.client)}</span>` : ''}</h1>
         <p>${esc(job.department || '')} · ${esc(job.location || '')} · ${esc(job.employment_type || '')} · ${job.openings} opening${job.openings > 1 ? 's' : ''}</p></div>
       <div class="row">${canEdit ? `<select class="input" id="status" style="width:auto" aria-label="Job status">${['draft', 'open', 'on_hold', 'closed'].map(s => `<option value="${s}" ${job.status === s ? 'selected' : ''}>${s === 'on_hold' ? 'On hold' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select>
-        <button class="btn" id="edit">Edit</button>` : ''}${job.status === 'open' && job.slug ? `<a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Careers page ↗</a>` : ''}<a class="btn primary" href="#/pipeline/${job.id}">${icon('board', 16)}Open pipeline</a></div></div>
+        <button class="btn" id="edit">Edit</button>` : ''}${(job.rounds || []).length ? `<button class="btn" id="jcopy" aria-haspopup="menu">${icon('cal', 16)}Copy booking link ▾</button>` : ''}${job.status === 'open' && job.slug ? `<a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Careers page ↗</a>` : ''}<a class="btn primary" href="#/pipeline/${job.id}">${icon('board', 16)}Open pipeline</a></div></div>
       <div class="tabs" role="tablist">${[['brief', 'AI screening'], ['team', 'Panel and rounds'], ['form', 'Application form'], ['emails', 'Emails'], ['jd', 'Job description']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
       <div id="tabbody"></div>`;
     $$('[data-tab]', el).forEach(b => b.onclick = () => location.hash = `#/jobs/${id}?tab=${b.dataset.tab}`);
@@ -242,6 +242,7 @@
       $('#status').onchange = async e => { try { await api.updateJob(id, { status: e.target.value }); toast(e.target.value === 'open' ? 'Job is open and live on the careers page' : 'Status updated'); } catch (er) { fail(er); } };
       $('#edit').onclick = () => jobForm(job);
     }
+    const jc = $('#jcopy'); if (jc) jc.onclick = async e => { const btn = e.currentTarget; let team = []; try { team = await api.team(); } catch (er) { team = []; } linkMenu(btn, job, team); };
     const body = $('#tabbody');
     if (tab === 'jd') { body.innerHTML = `<div class="card card-b jd">${esc(job.jd_text) || '<span class="muted">No description yet.</span>'}</div>`; return; }
     if (tab === 'team') return panelBuilder(body, job, canEdit);
@@ -552,11 +553,13 @@
     const roundsN = (job?.rounds || []).length;
     let filter = params.get('v') || 'all', sort = 'score';
     el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Blue cards</span> have an interview booked.</p></div>
-      <div class="board-tools"><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
+      <div class="board-tools"><button class="btn sm" id="copylinks" aria-haspopup="menu">${icon('cal', 15)}Copy booking link ▾</button><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
         <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="new">Newest</button></div></div></div>
       <div class="board" id="board"></div>`;
     $('#jobsel').onchange = e => location.hash = `#/pipeline/${e.target.value}`;
+    let team = []; try { team = await api.team(); } catch (e) { team = []; }
+    $('#copylinks').onclick = e => linkMenu(e.currentTarget, job, team);
     const draw = async () => {
       let cards = await api.cards(jobId);
       if (filter !== 'all') cards = cards.filter(c => c.verdict === filter);
@@ -564,11 +567,12 @@
       const cols = STAGES.filter(s => !STAGE_ROUND[s.id] || STAGE_ROUND[s.id] <= Math.max(roundsN, 1) || cards.some(c => c.stage_id === s.id));
       $('#board').innerHTML = cols.map(s => { const list = cards.filter(c => c.stage_id === s.id);
         const rd = STAGE_ROUND[s.id] ? job?.rounds?.[STAGE_ROUND[s.id] - 1] : null;
-        return `<section class="col" data-stage="${s.id}" aria-label="${s.name}"><div class="col-h"><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span><span class="n">${list.length}</span></div>
+        return `<section class="col" data-stage="${s.id}" aria-label="${s.name}"><div class="col-h"><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span><span class="row" style="gap:6px;flex-wrap:nowrap">${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
           <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="true" data-card="${c.id}" tabindex="0">
             <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div></div>
             ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ''}${c.interview_at ? `<div class="booked-tag">${icon('cal', 13)}<span>Booked · ${fmtDate(c.interview_at)} ${fmtTime(c.interview_at)}${c.interviewer_name ? ` · ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
           </article>`).join('') || '<div class="small muted" style="padding:10px 4px">No one here yet</div>'}</div></section>`; }).join('');
+      $$('[data-colcopy]').forEach(b => b.onclick = e => { e.stopPropagation(); const n = +b.dataset.colcopy; copyLink(roundLink(job, n, team)?.url, `Round ${n} booking link`); });
       $$('[data-card]').forEach(k => {
         k.onclick = () => openCandidate(k.dataset.card);
         k.onkeydown = e => e.key === 'Enter' && openCandidate(k.dataset.card);
@@ -621,6 +625,50 @@
     draw();
   }
 
+
+  /* ───────── booking links (copy / resend) ───────── */
+  // The link candidates use to book a round: the round's Cal.com link if it belongs to the current interviewer, else their own booking page
+  function roundLink(job, n, team) {
+    const rd = (job?.rounds || [])[n - 1]; if (!rd) return null;
+    const t = (team || []).find(x => x.id === rd.interviewer_id), l = (job.cal_links || {})[n];
+    if (l && l.url && (!t || !t.cal_account || l.account === t.cal_account)) return { url: l.url, cal: true, who: t?.full_name || '' };
+    if (t && t.booking_url) return { url: t.booking_url, cal: false, who: t.full_name };
+    return null;
+  }
+  // Same link with the candidate's name and email filled in, tagged so the booking lands on their application
+  function personalLink(link, a, n) {
+    if (!link) return null;
+    if (!link.cal) return link.url;
+    const c = a.candidates || {}, u = new URL(link.url);
+    if (c.full_name) u.searchParams.set('name', c.full_name);
+    if (c.email) u.searchParams.set('email', c.email);
+    u.searchParams.set('metadata[application_id]', a.id); u.searchParams.set('metadata[round]', String(n));
+    return u.toString();
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+      const t = document.createElement('textarea'); t.value = text; t.style.cssText = 'position:fixed;opacity:0'; document.body.append(t); t.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (er) { ok = false; } t.remove(); return ok; }
+  }
+  async function copyLink(url, what) {
+    if (!url) return toast('No booking link for this round yet. Choose an interviewer who is on Cal.com, or who has their own booking page.', true);
+    toast(await copyText(url) ? `${what} copied` : `Copy this link: ${url}`, false);
+  }
+  // A small menu listing each round's link, for the pipeline and job page headers
+  function linkMenu(btn, job, team) {
+    document.querySelector('.link-menu')?.remove();
+    const rounds = job?.rounds || [];
+    const m = document.createElement('div'); m.className = 'link-menu card'; m.setAttribute('role', 'menu');
+    m.innerHTML = rounds.length ? rounds.map((rd, i) => { const l = roundLink(job, i + 1, team);
+      return `<button type="button" role="menuitem" data-cl="${i + 1}" ${l ? '' : 'disabled'}><span><b>Round ${i + 1}</b> · ${esc(rd.name || '')}<span class="small muted" style="display:block">${l ? `${esc(firstName(l.who))}'s ${l.cal ? 'Cal.com' : 'booking page'}` : 'No link yet'}</span></span>${icon('copy', 15)}</button>`; }).join('')
+      : '<div class="small muted" style="padding:10px 12px">Set up interview rounds on the job first.</div>';
+    document.body.append(m);
+    const r = btn.getBoundingClientRect();
+    m.style.top = (r.bottom + window.scrollY + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.left + window.scrollX, window.innerWidth - m.offsetWidth - 8)) + 'px';
+    $$('[data-cl]', m).forEach(b => b.onclick = () => { const n = +b.dataset.cl; copyLink(roundLink(job, n, team)?.url, `Round ${n} booking link`); m.remove(); });
+    const off = e => { if (!m.contains(e.target) && e.target !== btn) { m.remove(); document.removeEventListener('mousedown', off); } };
+    setTimeout(() => document.addEventListener('mousedown', off), 0);
+  }
   /* ───────── candidate drawer ───────── */
   async function openCandidate(id) {
     const s = document.createElement('div'); s.className = 'scrim';
@@ -647,6 +695,8 @@
           ${canAct ? `<div class="row" style="gap:8px">
             <select class="input" id="mv" style="width:auto" aria-label="Move to stage">${STAGES.filter(st => st.id !== 7 && (!STAGE_ROUND[st.id] || STAGE_ROUND[st.id] <= Math.max((a.jobs?.rounds || []).length, 1) || st.id === a.stage_id)).map(st => `<option value="${st.id}" ${st.id === a.stage_id ? 'selected' : ''}>${st.name}</option>`).join('')}</select>
             <button class="btn primary sm" id="sched">${icon('cal', 15)}Schedule interview</button>
+            ${STAGE_ROUND[a.stage_id] ? `<button class="btn sm" id="cplink" title="Copies this candidate's booking link with their name and email filled in">${icon('copy', 15)}Copy booking link</button>
+              <button class="btn sm" id="rsend">${icon('mail', 15)}${(a.interviews || []).some(i => i.status === 'scheduled' && i.stage_id === a.stage_id) ? 'Resend confirmation' : 'Resend booking email'}</button>` : ''}
             <button class="btn sm" id="resume">${icon('file', 15)}Resume</button>
             ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
             ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}</div>` : ''}
@@ -684,6 +734,17 @@
       if (!canAct) return;
       $('#mv', s).onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, () => { render(); state.redraw?.(); }); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); render(); state.redraw?.(); } catch (er) { fail(er); } };
       $('#sched', s).onclick = () => scheduleFlow(id, STAGE_ROUND[a.stage_id] ? a.stage_id : 3, () => { render(); state.redraw?.(); });
+      const cpl = $('#cplink', s);
+      if (cpl) cpl.onclick = async () => { const n = STAGE_ROUND[a.stage_id]; let team = []; try { team = await api.team(); } catch (e) { team = []; }
+        copyLink(personalLink(roundLink(a.jobs, n, team), a, n), `${firstName(c.full_name) || 'Candidate'}'s Round ${n} booking link`); };
+      const rs = $('#rsend', s);
+      if (rs) rs.onclick = async () => { const n = STAGE_ROUND[a.stage_id];
+        const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled' && i.stage_id === a.stage_id);
+        rs.disabled = true; const label = rs.textContent;
+        rs.textContent = 'Sending…';
+        try { await api.resendEmail(id, iv ? 'interview_invite' : `stage_${a.stage_id}`, iv?.id);
+          toast(iv ? `Interview confirmation sent to ${c.email || 'the candidate'}` : `Round ${n} booking email sent to ${c.email || 'the candidate'}`); render(); }
+        catch (e) { rs.disabled = false; rs.textContent = label; fail(e); } };
       $$('[data-resend]', s).forEach(b => b.onclick = async () => { b.disabled = true;
         try { const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled'); await api.resendEmail(id, b.dataset.resend, iv?.id); toast('Email sent'); render(); }
         catch (e) { b.disabled = false; fail(e); } });

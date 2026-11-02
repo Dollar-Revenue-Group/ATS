@@ -412,3 +412,11 @@ details.card[open]>summary h3::before{content:'▾ '}
 @media (max-width:640px){.pm-grid{grid-template-columns:minmax(0,1fr)}.pm-tools select.input{max-width:none!important;width:100%}}
 .cal-title{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13px}
 .cal-title svg{flex:none;color:var(--accent-strong)}
+/* copy booking link */
+.link-menu{position:absolute;z-index:60;min-width:280px;max-width:360px;padding:4px;display:grid;gap:2px;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.link-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:9px 12px;font:inherit;color:inherit;cursor:pointer}
+.link-menu button:hover:not(:disabled),.link-menu button:focus-visible{background:var(--accent-soft)}
+.link-menu button:disabled{opacity:.5;cursor:not-allowed}
+.link-menu svg{flex:none;color:var(--muted)}
+.col-copy{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;padding:0}
+.col-copy:hover{color:var(--accent-strong);border-color:var(--accent)}

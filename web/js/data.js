@@ -111,7 +111,7 @@
       async application(id) {
         // All five reads run in parallel so the candidate drawer opens in one round trip
         const [appRes, scr, ivs, act, mails] = await Promise.all([
-          sb.from('applications').select('*, jobs(id,title,rounds), candidates(*), resumes(id,file_name,storage_path,uploaded_at)').eq('id', id).single(),
+          sb.from('applications').select('*, jobs(id,title,client,rounds,cal_links), candidates(*), resumes(id,file_name,storage_path,uploaded_at)').eq('id', id).single(),
           sb.from('ai_screenings').select('*').eq('application_id', id).order('created_at', { ascending: false }).limit(1),
           sb.from('interviews').select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email)').eq('application_id', id).order('scheduled_at'),
           sb.from('activity_log').select('*').eq('application_id', id).order('created_at', { ascending: false }),
