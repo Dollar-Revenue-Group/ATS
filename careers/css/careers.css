@@ -1,0 +1,43 @@
+/* careers site */
+body{display:flex;flex-direction:column;min-height:100vh}
+.careers-wrap{width:100%;flex:1}
+.c-foot{max-width:960px;width:100%;margin:0 auto;padding:22px 16px 34px;display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:13px}
+.c-foot a{color:var(--muted)}
+.role{text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.role:hover{border-color:var(--accent);transform:translateY(-1px)}
+.role h2{font-size:19px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.panel{padding:26px;display:grid;gap:16px}
+.jd{white-space:pre-wrap;line-height:1.65;font-size:15px}
+.req{color:var(--disq)}
+.help{font-size:12.5px;color:var(--muted);margin-top:-2px}
+.err-msg{color:var(--disq);font-weight:600}
+.file-pick{display:flex;align-items:center;gap:10px;padding:12px;border:1.5px dashed var(--line-2);border-radius:10px;background:var(--surface-2);cursor:pointer}
+.file-pick:hover{border-color:var(--accent)}
+.file-pick input{position:absolute;opacity:0;width:1px;height:1px}
+.file-pick b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.done{padding:36px;display:grid;gap:12px;justify-items:start}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+/* booking */
+.book-head{display:grid;gap:6px}
+.tz-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+.day{flex:none;min-width:84px;padding:10px 8px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);cursor:pointer;text-align:center;display:grid;gap:2px}
+.day b{font-size:18px;font-family:var(--display)}
+.day span{font-size:12px;color:var(--muted)}
+.day.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.day.on span{color:var(--accent-strong)}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.slot{padding:10px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);cursor:pointer;font-weight:600;font-family:var(--mono);font-size:14px}
+.slot:hover{border-color:var(--accent)}
+.slot.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.confirm{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border-radius:10px;background:var(--accent-soft)}
+@media (max-width:640px){.panel{padding:18px}.careers-hero{padding:40px 16px 64px}}
+.careers-wrap{align-content:start}
+.done{align-content:start}
+.done .chip,.done .btn{align-self:start}
+/* phone: country code + number */
+.phone-row{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);gap:8px;max-width:560px}
+.phone-row select.input{padding-right:28px;text-overflow:ellipsis}
+.phone-row input.input{font-size:17px;letter-spacing:.02em}
+@media (max-width:420px){.phone-row{grid-template-columns:minmax(0,1fr)}}

@@ -628,6 +628,25 @@
   }
 
 
+
+  // Phone shown big, with the country code split out, plus call and WhatsApp buttons
+  const DIAL_CODES = ['1','7','20','27','30','31','32','33','34','36','39','40','41','43','44','45','46','47','48','49','51','52','54','55','56','57','60','61','62','63','64','65','66','81','82','84','86','90','91','92','93','94','95','98','212','233','234','251','254','255','256','351','353','357','358','359','370','371','372','380','381','385','420','421','852','855','880','886','960','961','962','965','966','968','971','972','973','974','977','998'];
+  function splitPhone(raw) {
+    const t = String(raw || '').trim(), digits = t.replace(/\D/g, '');
+    const m = /^\+\s*(\d{1,3})[\s-]+(.+)$/.exec(t);
+    if (m) return { code: m[1], num: m[2].replace(/\D/g, ''), digits };
+    if (t.startsWith('+')) { const code = [...DIAL_CODES].sort((a, b) => b.length - a.length).find(c => digits.startsWith(c)); if (code) return { code, num: digits.slice(code.length), digits }; }
+    return { code: '', num: digits || t, digits };
+  }
+  function phoneBlock(raw) {
+    const p = splitPhone(raw), full = p.code ? p.code + p.num : p.digits;
+    const n = p.num;
+    const pretty = !/^\d+$/.test(n) ? n : p.code === '1' && n.length === 10 ? `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`
+      : p.code === '92' && n.length === 10 ? `${n.slice(0, 3)} ${n.slice(3)}` : n.length === 10 ? `${n.slice(0, 5)} ${n.slice(5)}` : n;
+    return `<div class="phone-big"><span class="pcode">${p.code ? '+' + esc(p.code) : '—'}</span><span class="pnum">${esc(pretty)}</span>
+      <a class="btn sm" href="tel:+${esc(full)}">Call</a><a class="btn sm" href="https://wa.me/${esc(full)}" target="_blank" rel="noopener">WhatsApp</a>
+      <button type="button" class="btn sm ghost" data-copyphone="+${esc(full)}">Copy</button>${p.code ? '' : '<span class="small" style="color:var(--review)">No country code</span>'}</div>`;
+  }
   /* ───────── booking links (copy / resend) ───────── */
   // The link candidates use to book a round: the round's Cal.com link if it belongs to the current interviewer, else their own booking page
   function roundLink(job, n, team) {
@@ -692,8 +711,9 @@
         <div class="drawer-h">
           <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${avatar(name, 48)}
             <div style="flex:1;min-width:0"><h2>${esc(name)}</h2><div class="small muted">${esc(a.jobs?.title)} · ${stageName(a.stage_id)} · applied ${fmtDate(a.created_at)}</div>
-              <div class="row" style="margin-top:8px;gap:6px">${chip(card)}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.phone ? `<span class="tag">${esc(c.phone)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}</div></div>
+              <div class="row" style="margin-top:8px;gap:6px">${chip(card)}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}</div></div>
             ${ring(sc?.score ?? null, sc?.verdict, 64)}<button class="x" data-close aria-label="Close">${icon('x', 20)}</button></div>
+          ${c.phone ? phoneBlock(c.phone) : ''}
           ${canAct ? `<div class="row" style="gap:8px">
             <select class="input" id="mv" style="width:auto" aria-label="Move to stage">${STAGES.filter(st => st.id !== 7 && (!STAGE_ROUND[st.id] || STAGE_ROUND[st.id] <= Math.max((a.jobs?.rounds || []).length, 1) || st.id === a.stage_id)).map(st => `<option value="${st.id}" ${st.id === a.stage_id ? 'selected' : ''}>${st.name}</option>`).join('')}</select>
             <button class="btn primary sm" id="sched">${icon('cal', 15)}Schedule interview</button>
@@ -736,6 +756,7 @@
       if (!canAct) return;
       $('#mv', s).onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, () => { render(); state.redraw?.(); }); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); render(); state.redraw?.(); } catch (er) { fail(er); } };
       $('#sched', s).onclick = () => scheduleFlow(id, STAGE_ROUND[a.stage_id] ? a.stage_id : 3, () => { render(); state.redraw?.(); });
+      $$('[data-copyphone]', s).forEach(b => b.onclick = async () => toast(await copyText(b.dataset.copyphone) ? 'Phone number copied' : b.dataset.copyphone));
       const cpl = $('#cplink', s);
       if (cpl) cpl.onclick = async () => { const n = STAGE_ROUND[a.stage_id]; let team = []; try { team = await api.team(); } catch (e) { team = []; }
         copyLink(personalLink(roundLink(a.jobs, n, team), a, n), `${firstName(c.full_name) || 'Candidate'}'s Round ${n} booking link`); };
