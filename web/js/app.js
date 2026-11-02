@@ -1024,19 +1024,61 @@
   const DAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [7, 'Sun']];
   async function panelSettings(sb) {
     const team = await api.team();
-    sb.innerHTML = `<div class="card"><div class="card-h"><div><h3>Interview panel</h3><div class="small muted">People who interview candidates. They do not need a login. Candidates book a time from their weekly hours, and invites use their meeting link.</div></div>
-        <button class="btn primary sm" id="addm">${icon('plus', 14)}Add person</button></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Time zone</th><th>Weekly hours</th><th>Meeting link</th><th>Cal.com</th><th>Status</th><th></th></tr></thead><tbody>
-      ${team.map(t => { const av = t.availability || {}; const days = Object.keys(av.days || {}).filter(k => (av.days[k] || []).length).sort();
-        return `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(t.full_name, 30)}<div><b>${esc(t.full_name)}</b><div class="small muted">${esc(t.title || '')}${t.title ? ' · ' : ''}${esc(t.email)}</div></div></div></td>
-        <td class="small">${esc(t.timezone)}</td><td class="small">${days.map(k => DAYS.find(d => d[0] === +k)?.[1]).join(', ') || '—'} ${days.length ? esc((av.days[days[0]][0] || []).join('–')) : ''}</td>
-        <td class="small">${t.meeting_link ? `<a href="${esc(t.meeting_link)}" target="_blank" rel="noopener">Link ↗</a>` : '<span style="color:var(--review)">Missing</span>'}${t.booking_url ? '<div class="muted">+ own booking page</div>' : ''}</td>
-        <td class="small">${t.cal_key_id ? `<span class="chip v-pass">Connected</span><div class="muted">${esc(t.cal_username || '')}</div>` : t.cal_account ? '<span class="chip v-pass">Connected</span><div class="muted">set up in n8n</div>' : '<span class="muted">Not connected</span>'}</td>
-        <td>${t.active === false ? '<span class="chip">Inactive</span>' : '<span class="chip v-pass">Active</span>'}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-em="${t.id}">Edit</button>${CFG.CALCOM_CONNECT_URL ? `<button class="btn sm" data-cal="${t.id}">${t.cal_key_id || t.cal_account ? 'Cal.com' : 'Connect Cal.com'}</button>` : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">No one yet. Add the people who run interviews.</td></tr>'}
-      </tbody></table></div></div>`;
-    $('#addm', sb).onclick = () => memberForm(null, () => panelSettings(sb));
-    $$('[data-em]', sb).forEach(b => b.onclick = () => memberForm(team.find(t => t.id === b.dataset.em), () => panelSettings(sb)));
-    $$('[data-cal]', sb).forEach(b => b.onclick = () => calConnectForm(team.find(t => t.id === b.dataset.cal), () => panelSettings(sb)));
+    const FILTERS = [['all', 'Everyone'], ['cal', 'Connected to Cal.com'], ['nocal', 'Not connected to Cal.com'], ['nolink', 'No meeting link'], ['ext', 'Outside DRG'], ['inactive', 'Inactive']];
+    const calOn = t => !!(t.cal_key_id || t.cal_account);
+    const match = (t, f) => f === 'cal' ? calOn(t) : f === 'nocal' ? !calOn(t) && t.active !== false : f === 'nolink' ? !t.meeting_link && t.active !== false
+      : f === 'ext' ? !!t.company : f === 'inactive' ? t.active === false : true;
+    let filter = 'all', q = '', open = false, focusId = null;
+    const hours = t => { const av = t.availability || {}; const days = Object.keys(av.days || {}).filter(k => (av.days[k] || []).length).sort();
+      if (!days.length) return 'No hours set';
+      const names = days.map(k => DAYS.find(d => d[0] === +k)?.[1]);
+      const run = days.length === 5 && days.join('') === '12345' ? 'Mon–Fri' : names.join(', ');
+      return `${run} · ${(av.days[days[0]][0] || []).join('–')}`; };
+    const card = t => { const cal = t.cal_key_id ? `<span class="pill ok">${icon('check', 12)}Cal.com · ${esc(t.cal_username || 'connected')}</span>`
+        : t.cal_account ? `<span class="pill ok">${icon('check', 12)}Cal.com · via n8n</span>` : '<span class="pill">Cal.com not connected</span>';
+      return `<article class="pm-card ${t.active === false ? 'off' : ''} ${t.id === focusId ? 'focus' : ''}" id="pm-${t.id}">
+        <div class="pm-head">${avatar(t.full_name, 42)}<div class="pm-who"><b>${esc(t.full_name)}</b><span class="small muted">${esc(t.title || 'Interviewer')}</span></div>
+          ${t.company ? `<span class="chip ext">${esc(t.company)}</span>` : ''}${t.active === false ? '<span class="chip">Inactive</span>' : ''}</div>
+        <div class="pm-mail small muted">${icon('mail', 14)}<span>${esc(t.email)}</span></div>
+        <dl class="pm-facts">
+          <div><dt>${icon('cal', 14)}Hours</dt><dd>${esc(hours(t))}</dd></div>
+          <div><dt>${icon('dash', 14)}Time zone</dt><dd>${esc(t.timezone || 'Asia/Kolkata')}</dd></div>
+          <div><dt>${icon('people', 14)}Meeting link</dt><dd>${t.meeting_link ? `<a href="${esc(t.meeting_link)}" target="_blank" rel="noopener">Open ↗</a>` : '<span style="color:var(--review)">Missing</span>'}${t.booking_url ? ' · <span class="muted">own booking page</span>' : ''}</dd></div>
+        </dl>
+        <div class="pm-foot">${cal}<span class="grow"></span><button class="btn sm" data-em="${t.id}">Edit</button>
+          ${CFG.CALCOM_CONNECT_URL ? `<button class="btn sm ${calOn(t) ? '' : 'primary'}" data-cal="${t.id}">${calOn(t) ? 'Cal.com' : 'Connect Cal.com'}</button>` : ''}</div></article>`; };
+    const draw = () => {
+      const ql = q.trim().toLowerCase();
+      const list = team.filter(t => match(t, filter) && (!ql || `${t.full_name} ${t.email} ${t.title || ''} ${t.company || ''}`.toLowerCase().includes(ql)));
+      const sugg = ql ? team.filter(t => `${t.full_name} ${t.email}`.toLowerCase().includes(ql)).slice(0, 8) : team.slice(0, 8);
+      const n = { all: team.length, cal: team.filter(calOn).length, nolink: team.filter(t => !t.meeting_link && t.active !== false).length, ext: team.filter(t => t.company).length };
+      sb.innerHTML = `<div class="card pm-top"><div class="card-h"><div><h3>Interview panel</h3><div class="small muted">People who interview candidates. They don't need a login: candidates book a time from their weekly hours, and invites use their meeting link.</div></div>
+          <button class="btn primary sm" id="addm">${icon('plus', 14)}Add person</button></div>
+        <div class="card-b" style="display:grid;gap:14px">
+          <div class="pm-stats"><span><b>${n.all}</b> people</span><span><b>${n.cal}</b> on Cal.com</span><span class="${n.nolink ? 'warn' : ''}"><b>${n.nolink}</b> missing a meeting link</span>${n.ext ? `<span><b>${n.ext}</b> outside DRG</span>` : ''}</div>
+          <div class="pm-tools">
+            <div class="pick-box grow"><span class="pm-search-ic">${icon('search', 16)}</span><input class="input" id="pmq" placeholder="Find a person by name or email…" autocomplete="off" value="${esc(q)}" role="combobox" aria-expanded="${open}" aria-controls="pml">
+              ${open ? `<div class="pick-list" id="pml" role="listbox">${sugg.map(t => `<button type="button" class="pick-opt" role="option" data-go="${t.id}">${avatar(t.full_name, 26)}<span class="grow"><b>${esc(t.full_name)}</b><span class="small muted" style="display:block">${esc(t.email)}</span></span>${calOn(t) ? '<span class="pill ok sm">Cal.com</span>' : ''}</button>`).join('')
+                || '<div class="small muted" style="padding:10px 12px">No one matches.</div>'}</div>` : ''}</div>
+            <select class="input" id="pmf" aria-label="Show" style="max-width:240px">${FILTERS.map(([k, l]) => `<option value="${k}" ${k === filter ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          </div></div></div>
+        <div class="pm-grid">${list.map(card).join('') || `<div class="card empty" style="grid-column:1/-1">${team.length ? 'No one matches this filter.' : 'No one yet. Add the people who run interviews.'}</div>`}</div>`;
+      $('#addm', sb).onclick = () => memberForm(null, () => panelSettings(sb));
+      $$('[data-em]', sb).forEach(b => b.onclick = () => memberForm(team.find(t => t.id === b.dataset.em), () => panelSettings(sb)));
+      $$('[data-cal]', sb).forEach(b => b.onclick = () => calConnectForm(team.find(t => t.id === b.dataset.cal), () => panelSettings(sb)));
+      $('#pmf', sb).onchange = e => { filter = e.target.value; focusId = null; draw(); };
+      const inp = $('#pmq', sb);
+      const keep = () => { const x = $('#pmq', sb); x.focus(); x.setSelectionRange(q.length, q.length); };
+      inp.oninput = () => { q = inp.value; open = true; focusId = null; draw(); keep(); };
+      inp.onfocus = () => { if (!open) { open = true; draw(); keep(); } };
+      inp.onkeydown = e => { if (e.key === 'Escape') { open = false; draw(); } if (e.key === 'Enter') { e.preventDefault(); $('[data-go]', sb)?.click(); } };
+      $$('[data-go]', sb).forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => {
+        const t = team.find(x => x.id === b.dataset.go); q = ''; open = false; filter = 'all'; focusId = t.id; draw();
+        const el = $(`#pm-${t.id}`, sb); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }; });
+      if (open) { const close = e => { if (!e.target.closest || !e.target.closest('.pm-tools .pick-box')) { document.removeEventListener('mousedown', close); if (open) { open = false; draw(); } } };
+        setTimeout(() => document.addEventListener('mousedown', close), 0); }
+    };
+    draw();
   }
   // Connect an interviewer's Cal.com: their API key is checked, stored encrypted, and the booking webhook is added for them
   function calConnectForm(t, after) {

@@ -380,3 +380,33 @@ details.card[open]>summary h3::before{content:'▾ '}
 .panel-pick .grow{flex:1;min-width:0}
 .chip.ext{background:var(--accent-soft);color:var(--accent-strong)}
 .chip.ext::before{display:none}
+
+/* Settings → Interview panel */
+.pm-top{margin-bottom:16px}
+.pm-stats{display:flex;flex-wrap:wrap;gap:8px}
+.pm-stats span{padding:6px 12px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line);font-size:13px;color:var(--ink-2,inherit)}
+.pm-stats span b{font-weight:700;margin-right:2px}
+.pm-stats span.warn{border-color:var(--review);color:var(--review)}
+.pm-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.pm-tools .pick-box{margin-top:0;min-width:240px;flex:1 1 320px}
+.pm-tools .pick-box .input{padding-left:36px}
+.pm-search-ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;display:flex;z-index:1}
+.pm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.pm-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;align-content:start;transition:border-color .15s,box-shadow .15s,transform .15s}
+.pm-card:hover{border-color:var(--line-2);box-shadow:0 6px 20px rgba(0,0,0,.06);transform:translateY(-1px)}
+.pm-card.off{opacity:.6}
+.pm-card.focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.pm-head{display:flex;align-items:center;gap:12px}
+.pm-who{display:grid;flex:1;min-width:0}
+.pm-who b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-mail{display:flex;align-items:center;gap:6px;min-width:0}
+.pm-mail span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-facts{margin:0;display:grid;gap:6px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.pm-facts div{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.pm-facts dt{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.pm-facts dd{margin:0;text-align:right;font-weight:500}
+.pm-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.pill.ok{background:var(--accent-soft);color:var(--accent-strong);border-color:transparent}
+.pill.sm{padding:2px 8px;font-size:11px}
+@media (max-width:640px){.pm-grid{grid-template-columns:minmax(0,1fr)}.pm-tools select.input{max-width:none!important;width:100%}}
