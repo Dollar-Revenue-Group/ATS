@@ -233,7 +233,7 @@
         <p>${esc(job.department || '')} · ${esc(job.location || '')} · ${esc(job.employment_type || '')} · ${job.openings} opening${job.openings > 1 ? 's' : ''}</p></div>
       <div class="row">${canEdit ? `<select class="input" id="status" style="width:auto" aria-label="Job status">${['draft', 'open', 'on_hold', 'closed'].map(s => `<option value="${s}" ${job.status === s ? 'selected' : ''}>${s === 'on_hold' ? 'On hold' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select>
         <button class="btn" id="edit">Edit</button>` : ''}${job.status === 'open' && job.slug ? `<a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Careers page ↗</a>` : ''}<a class="btn primary" href="#/pipeline/${job.id}">${icon('board', 16)}Open pipeline</a></div></div>
-      <div class="tabs" role="tablist">${[['brief', 'AI screening'], ['team', 'Panel and rounds'], ['form', 'Application form'], ['jd', 'Job description']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
+      <div class="tabs" role="tablist">${[['brief', 'AI screening'], ['team', 'Panel and rounds'], ['form', 'Application form'], ['emails', 'Emails'], ['jd', 'Job description']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
       <div id="tabbody"></div>`;
     $$('[data-tab]', el).forEach(b => b.onclick = () => location.hash = `#/jobs/${id}?tab=${b.dataset.tab}`);
     if (canEdit) {
@@ -244,6 +244,7 @@
     if (tab === 'jd') { body.innerHTML = `<div class="card card-b jd">${esc(job.jd_text) || '<span class="muted">No description yet.</span>'}</div>`; return; }
     if (tab === 'team') return panelBuilder(body, job, canEdit);
     if (tab === 'form') return formBuilder(body, job, canEdit);
+    if (tab === 'emails') return jobEmails(body, job, canEdit);
     rulesBuilder(body, job, canEdit);
   }
 
@@ -847,7 +848,7 @@
   }
 
   /* ───────── settings ───────── */
-  const BASE_PH = ['candidate_name', 'job_title'];
+  const BASE_PH = ['candidate_name', 'job_title', 'sender_name'];
   const ROUND_PH = [...BASE_PH, 'round_name', 'round_number', 'interviewer_name', 'duration', 'booking_link'];
   const TEMPLATE_INFO = {
     received: { title: 'Applied', when: 'Sent when a candidate applies on the careers site or you upload their resume.', ph: BASE_PH },
@@ -862,13 +863,13 @@
   };
   const SAMPLE = { candidate_name: 'Priya', job_title: 'Sales Development Representative', round_name: 'Intro call', round_number: '1', interviewer_name: 'Jay Khunt',
     duration: '30', booking_link: 'https://careers.dollarrevenuegroup.com/book/…', interview_time: 'Tuesday 3 November 2026, 11:00 AM (India Standard Time)', meeting_link: 'https://meet.google.com/abc-defg-hij',
-    rejection_reason: 'Not enough relevant experience: we need at least 1 year of hands-on Clay work for this role.' };
+    rejection_reason: 'Not enough relevant experience: we need at least 1 year of hands-on Clay work for this role.', sender_name: 'DRG Talent Team' };
   const fillSample = s => String(s || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => SAMPLE[k] ?? '');
   async function templateSettings(sb) {
     const ts = (await api.templates()).filter(t => t.key !== 'round_invite');
     const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
     ts.sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
-    sb.innerHTML = `<div class="card card-b small muted" style="margin-bottom:14px">Each pipeline stage has its own email. It goes out automatically, from the hiring mailbox, when a candidate enters that stage. Click a placeholder to insert it; it is filled in for each candidate. Switch a stage off to stop its email.</div>
+    sb.innerHTML = `<div id="senders"></div><div class="card card-b small muted" style="margin-bottom:14px">These are the default emails for every job. Each pipeline stage has its own email, and it goes out automatically when a candidate enters that stage. Click a placeholder to insert it; it is filled in for each candidate. Switch a stage off to stop its email. A job can have its own wording and sender on its <b>Emails</b> tab.</div>
       <div style="display:grid;gap:14px">${ts.map(t => { const info = TEMPLATE_INFO[t.key] || { title: t.label || t.key, when: '', ph: BASE_PH }; const on = t.enabled !== false;
         return `<div class="card tpl ${on ? '' : 'off'}" data-tpl="${t.key}"><div class="card-h"><div><div class="eyebrow">${info.title === 'Interview confirmed' ? 'After booking' : 'Stage'}</div><h3>${esc(info.title)}</h3><div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div>
           <label class="switch" title="${on ? 'Sending automatically' : 'Switched off'}"><input type="checkbox" data-on="${t.key}" ${on ? 'checked' : ''}><span></span><b class="small">${on ? 'On' : 'Off'}</b></label></div>
@@ -878,6 +879,7 @@
             <div class="row" style="gap:6px"><span class="small muted">Insert:</span>${info.ph.map(p => `<button type="button" class="tag ph" data-ph="${p}" data-for="${t.key}">{{${p}}}</button>`).join('')}</div>
             <div class="row" style="justify-content:space-between"><button type="button" class="btn sm ghost" data-prev="${t.key}">Preview</button><button class="btn sm primary" data-save="${t.key}">Save</button></div>
             <div class="preview" data-preview="${t.key}" hidden></div></div></div>`; }).join('')}</div>`;
+    senderSettings($('#senders', sb));
     let lastField = {};
     $$('[data-subj],[data-body]', sb).forEach(f => f.onfocus = () => { lastField[f.dataset.subj || f.dataset.body] = f; });
     $$('[data-ph]', sb).forEach(b => b.onclick = () => {
@@ -895,6 +897,129 @@
     $$('[data-on]', sb).forEach(c => c.onchange = async () => { const k = c.dataset.on, card = c.closest('.tpl');
       try { await api.saveTemplate(k, null, null, c.checked); card.classList.toggle('off', !c.checked); $('b', c.parentElement).textContent = c.checked ? 'On' : 'Off';
         toast(`${(TEMPLATE_INFO[k] || {}).title || k} email ${c.checked ? 'switched on' : 'switched off'}`); } catch (e) { c.checked = !c.checked; fail(e); } });
+  }
+  // Label for a sender in dropdowns and lists
+  const senderLabel = s => s.from_email ? `${s.from_name} · ${s.from_email}` : `${s.from_name} · hiring mailbox (default)`;
+
+  // Settings → Email templates: who emails can come from
+  async function senderSettings(host) {
+    let senders = [];
+    try { senders = await api.senders(); } catch (e) { host.innerHTML = ''; return; }
+    const isAdmin = state.me?.role === 'admin';
+    let editing = null;   // sender id, 'new', or null
+    const draw = () => {
+      host.innerHTML = `<div class="card" style="margin-bottom:14px"><div class="card-h"><div><h3>Email senders</h3><div class="small muted" style="max-width:72ch">Each job can send its candidate emails from one of these. The default is the hiring mailbox n8n is signed in to.</div></div>
+          ${isAdmin && editing !== 'new' ? '<button class="btn sm" id="snew">Add a sender</button>' : ''}</div>
+        <div class="card-b" style="display:grid;gap:10px">
+          ${senders.map(s => editing === s.id ? form(s) : `<div class="row" style="gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">
+              <span class="grow"><b>${esc(s.from_name)}</b>${s.is_default ? ' <span class="chip v-pass">Default</span>' : ''}${s.active === false ? ' <span class="chip">Hidden</span>' : ''}
+                <span class="small muted" style="display:block">${s.from_email ? esc(s.from_email) : 'Hiring mailbox'}${s.reply_to ? ` · replies go to ${esc(s.reply_to)}` : ''}</span></span>
+              ${isAdmin ? `<button class="btn sm ghost" data-sedit="${s.id}">Edit</button>` : ''}</div>`).join('')}
+          ${editing === 'new' ? form({}) : ''}
+          <details class="small muted"><summary style="cursor:pointer">How to send from another address, e.g. zaina@techjays.com</summary>
+            <ol style="margin:8px 0 0 18px;display:grid;gap:4px">
+              <li>Open the hiring mailbox in Gmail → Settings → <b>Accounts</b> → <b>Send mail as</b> → <b>Add another email address</b>.</li>
+              <li>Enter the name and address. Google sends a confirmation code to that inbox; the owner of the address (e.g. Zaina) confirms it.</li>
+              <li>Add the same address here and choose it on the job's <b>Emails</b> tab.</li>
+            </ol>
+            <p style="margin:8px 0 0">Until it's confirmed in Gmail, emails still go out from the hiring mailbox address, using this sender's name and reply-to address.</p></details>
+        </div></div>`;
+      const nb = $('#snew', host); if (nb) nb.onclick = () => { editing = 'new'; draw(); $('#sfn', host).focus(); };
+      $$('[data-sedit]', host).forEach(b => b.onclick = () => { editing = b.dataset.sedit; draw(); });
+      const cancel = $('#scancel', host); if (cancel) cancel.onclick = () => { editing = null; draw(); };
+      const save = $('#ssave', host); if (save) save.onclick = async () => {
+        const cur = senders.find(s => s.id === editing) || {};
+        const d = { from_name: $('#sfn', host).value.trim() };
+        if (!cur.is_default) { d.from_email = $('#sfe', host).value.trim().toLowerCase() || null; d.reply_to = $('#srt', host).value.trim().toLowerCase() || null; d.active = $('#sac', host).checked; }
+        const em = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!d.from_name) return toast('Add the name candidates will see, e.g. TechJays Talent Team.', true);
+        if (!cur.is_default && (!d.from_email || !em.test(d.from_email))) return toast('Add the email address it should come from.', true);
+        if (d.reply_to && !em.test(d.reply_to)) return toast('The reply-to address is not a valid email.', true);
+        save.disabled = true;
+        try { const row = await api.saveSender(cur.id ? { id: cur.id, ...d } : d);
+          senders = cur.id ? senders.map(s => s.id === cur.id ? row : s) : [...senders, row]; editing = null; draw(); toast('Sender saved'); }
+        catch (e) { save.disabled = false; fail(/duplicate|unique/i.test(e.message) ? new Error('That address is already a sender.') : e); }
+      };
+    };
+    const form = s => `<div class="card" style="padding:14px;display:grid;gap:10px">
+        <div class="grid2"><div class="field"><label for="sfn">Name candidates see</label><input class="input" id="sfn" value="${esc(s.from_name || '')}" placeholder="TechJays Talent Team"></div>
+          ${s.is_default ? '<div class="field"><span class="lbl">Address</span><div class="small muted" style="padding-top:10px">The hiring mailbox n8n is signed in to</div></div>'
+            : `<div class="field"><label for="sfe">From address</label><input class="input" id="sfe" type="email" value="${esc(s.from_email || '')}" placeholder="zaina@techjays.com"></div>`}</div>
+        ${s.is_default ? '' : `<div class="grid2"><div class="field"><label for="srt">Replies go to (optional)</label><input class="input" id="srt" type="email" value="${esc(s.reply_to || '')}" placeholder="Same as the From address"></div>
+          <label class="row" style="gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" id="sac" ${s.active === false ? '' : 'checked'}> Show in the job's sender list</label></div>`}
+        <div class="row" style="gap:8px"><button class="btn primary sm" id="ssave">Save sender</button><button class="btn sm" id="scancel">Cancel</button></div></div>`;
+    draw();
+  }
+
+  // Job → Emails tab: the job's sender, and its own versions of the default templates
+  async function jobEmails(body, job, canEdit) {
+    const [defs, own0, senders] = await Promise.all([api.templates(), api.jobTemplates(job.id), api.senders().catch(() => [])]);
+    let own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
+    const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
+    const dis = canEdit ? '' : 'disabled';
+    const active = senders.filter(s => s.active !== false || s.id === job.sender_id);
+    const cur = () => senders.find(s => s.id === job.sender_id) || senders.find(s => s.is_default) || { from_name: 'DRG Talent Team' };
+    const senderNote = () => { const s = cur(); return s.from_email
+      ? `Candidates see <b>${esc(s.from_name)}</b> &lt;${esc(s.from_email)}&gt;${s.reply_to ? ` and replies go to ${esc(s.reply_to)}` : ''}. ${esc(s.from_email)} must be set up as a "Send mail as" address on the hiring mailbox (Settings → Email templates explains how); until then emails go out from the hiring mailbox address with this name.`
+      : `Candidates see <b>${esc(s.from_name)}</b> from the hiring mailbox.`; };
+    const card = t => { const info = TEMPLATE_INFO[t.key] || { title: t.key, when: '', ph: BASE_PH }, o = own[t.key], src = o || t, on = (o ? o.enabled : t.enabled) !== false;
+      return `<details class="card tpl ${on ? '' : 'off'}" data-jt="${t.key}"><summary class="card-h" style="cursor:pointer;list-style:none">
+          <div><h3>${esc(info.title)} ${o ? '<span class="chip v-pass">Custom for this job</span>' : '<span class="chip">Default</span>'}${on ? '' : ' <span class="chip v-review">Off for this job</span>'}</h3>
+            <div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div><span class="small muted">${canEdit ? 'Edit' : 'View'} ▾</span></summary>
+        <div class="card-b" style="display:grid;gap:10px">
+          <div class="field"><label for="js-${t.key}">Subject</label><input class="input" id="js-${t.key}" data-subj="${t.key}" value="${esc(src.subject)}" ${dis}></div>
+          <div class="field"><label for="jb-${t.key}">Message</label><textarea class="input" rows="9" id="jb-${t.key}" data-body="${t.key}" ${dis}>${esc(src.body)}</textarea></div>
+          ${canEdit ? `<div class="row" style="gap:6px"><span class="small muted">Insert:</span>${[...info.ph, 'sender_name'].filter((p, i, a) => a.indexOf(p) === i).map(p => `<button type="button" class="tag ph" data-ph="${p}" data-for="${t.key}">{{${p}}}</button>`).join('')}</div>` : ''}
+          <label class="row" style="gap:8px"><input type="checkbox" data-jon="${t.key}" ${on ? 'checked' : ''} ${dis}> Send this email for this job</label>
+          <div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm ghost" data-prev="${t.key}">Preview</button>
+            ${canEdit ? `<span class="row" style="gap:8px">${o ? `<button type="button" class="btn sm" data-reset="${t.key}">Reset to default</button>` : ''}<button type="button" class="btn sm primary" data-save="${t.key}">Save for this job</button></span>` : ''}</div>
+          <div class="preview" data-preview="${t.key}" hidden></div></div></details>`; };
+    const draw = (openKey) => {
+      body.innerHTML = `<div style="display:grid;gap:14px;max-width:860px">
+        <div class="card"><div class="card-h"><div><h3>Sender</h3><div class="small muted">Who candidates for this job get emails from.</div></div></div>
+          <div class="card-b" style="display:grid;gap:8px"><select class="input" id="jsnd" style="max-width:520px" ${dis}>${active.map(s => `<option value="${s.id}" ${s.id === (job.sender_id || cur().id) ? 'selected' : ''}>${esc(senderLabel(s))}</option>`).join('')}</select>
+            <div class="small muted" id="jsndn">${senderNote()}</div>
+            ${state.me?.role === 'admin' ? '<a class="small" href="#/settings?tab=emails">Add or edit senders in Settings → Email templates</a>' : ''}</div></div>
+        <div class="card card-b small muted">These emails start as copies of the defaults in Settings → Email templates. Change any of them here and only this job uses your version; the rest keep following the defaults.</div>
+        ${ts.map(card).join('')}</div>`;
+      if (openKey) { const d = $(`[data-jt="${openKey}"]`, body); if (d) d.open = true; }
+      const sel = $('#jsnd', body);
+      if (sel && canEdit) sel.onchange = async () => { const prev = job.sender_id; job.sender_id = sel.value;
+        try { await api.updateJob(job.id, { sender_id: sel.value }); $('#jsndn', body).innerHTML = senderNote(); toast(`Emails for this job now come from ${cur().from_name}`); }
+        catch (e) { job.sender_id = prev; sel.value = prev || cur().id; fail(e); } };
+      let lastField = {};
+      $$('[data-subj],[data-body]', body).forEach(f => f.onfocus = () => { lastField[f.dataset.subj || f.dataset.body] = f; });
+      $$('[data-ph]', body).forEach(b => b.onclick = () => {
+        const k = b.dataset.for, f = lastField[k] || $(`[data-body="${k}"]`, body), ins = `{{${b.dataset.ph}}}`;
+        const st = f.selectionStart ?? f.value.length, en = f.selectionEnd ?? f.value.length;
+        f.value = f.value.slice(0, st) + ins + f.value.slice(en); f.focus(); f.selectionStart = f.selectionEnd = st + ins.length; });
+      $$('[data-prev]', body).forEach(b => b.onclick = () => { const k = b.dataset.prev, box = $(`[data-preview="${k}"]`, body);
+        const smp = s => fillSample(String(s).replace(/\{\{\s*job_title\s*\}\}/g, job.title).replace(/\{\{\s*sender_name\s*\}\}/g, cur().from_name));
+        box.hidden = !box.hidden; b.textContent = box.hidden ? 'Preview' : 'Hide preview';
+        box.innerHTML = `<div class="small muted">Example with sample details · from ${esc(cur().from_name)}</div><b>${esc(smp($(`[data-subj="${k}"]`, body).value))}</b><div style="white-space:pre-wrap;margin-top:8px">${esc(smp($(`[data-body="${k}"]`, body).value))}</div>`; });
+      if (!canEdit) return;
+      $$('[data-save]', body).forEach(b => b.onclick = async () => { const k = b.dataset.save, info = TEMPLATE_INFO[k] || {};
+        const subject = $(`[data-subj="${k}"]`, body).value.trim(), text = $(`[data-body="${k}"]`, body).value.trim(), enabled = $(`[data-jon="${k}"]`, body).checked;
+        if (!subject || !text) return toast('Add a subject and a message.', true);
+        if (info.need && enabled && !text.includes(`{{${info.need}}}`)) return toast(`Keep {{${info.need}}} in the message, or candidates cannot book their interview.`, true);
+        b.disabled = true;
+        try { own[k] = await api.saveJobTemplate(job.id, k, { subject, body: text, enabled }); draw(k); toast(`${info.title || k} email saved for this job`); }
+        catch (e) { b.disabled = false; fail(e); } });
+      $$('[data-reset]', body).forEach(b => b.onclick = async () => { const k = b.dataset.reset, info = TEMPLATE_INFO[k] || {};
+        if (!confirmReset(info.title || k)) return;
+        b.disabled = true;
+        try { await api.resetJobTemplate(job.id, k); delete own[k]; draw(k); toast(`${info.title || k} email is back to the default`); }
+        catch (e) { b.disabled = false; fail(e); } });
+    };
+    draw();
+  }
+  // Ask before throwing away a job's own version of an email: click twice (no browser dialog)
+  let resetPending = null;
+  function confirmReset(title) {
+    if (resetPending === title) { resetPending = null; return true; }
+    resetPending = title; setTimeout(() => { if (resetPending === title) resetPending = null; }, 6000);
+    toast(`Click "Reset to default" again to replace this job's ${title} email with the default.`); return false;
   }
   const DAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [7, 'Sun']];
   async function panelSettings(sb) {

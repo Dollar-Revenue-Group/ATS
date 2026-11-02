@@ -170,6 +170,17 @@
                   : ok(await sb.from('team_members').insert(d).select().single());
       },
       async setRole(id, role) { ok(await sb.from('profiles').update({ role }).eq('id', id)); },
+      async senders() { return ok(await sb.from('email_senders').select('*').order('is_default', { ascending: false }).order('from_name')); },
+      async saveSender(s) {
+        const { id, ...d } = s;
+        return id ? ok(await sb.from('email_senders').update(d).eq('id', id).select().single())
+                  : ok(await sb.from('email_senders').insert(d).select().single());
+      },
+      async jobTemplates(jobId) { return ok(await sb.from('job_email_templates').select('*').eq('job_id', jobId)); },
+      async saveJobTemplate(jobId, key, d) {
+        return ok(await sb.from('job_email_templates').upsert({ job_id: jobId, key, ...d, updated_at: new Date().toISOString() }, { onConflict: 'job_id,key' }).select().single());
+      },
+      async resetJobTemplate(jobId, key) { ok(await sb.from('job_email_templates').delete().eq('job_id', jobId).eq('key', key)); },
       async templates() { return ok(await sb.from('email_templates').select('*').order('sort').order('key')); },
       async saveTemplate(key, subject, body, enabled) {
         const d = { updated_at: new Date().toISOString() };
@@ -313,6 +324,8 @@
     ];
     const team = people.slice(0, 4).map((p, k) => ({ id: 'tm-' + p.id, cal_account: k < 2 ? 'demo' : null, full_name: p.full_name, email: p.email, title: p.role.replace('_', ' '), timezone: 'Asia/Kolkata',
       meeting_link: 'https://meet.google.com/abc-defg-hij', booking_url: null, active: true, availability: { slot: 30, days: { 1: [['10:00', '18:00']], 2: [['10:00', '18:00']], 3: [['10:00', '18:00']], 4: [['10:00', '18:00']], 5: [['10:00', '18:00']] } } }));
+    const senders = [{ id: 'snd-default', from_name: 'DRG Talent Team', from_email: null, reply_to: null, is_default: true, active: true }];
+    const jobTpls = [];
     let signedIn = true;
     const wait = (ms = 120) => new Promise(r => setTimeout(r, ms));
     const cardOf = a => {
@@ -409,6 +422,11 @@
       async fileUrl() { return null; },
       async setRole(uid, role) { people.find(p => p.id === uid).role = role; },
       async templates() { return templates; },
+      async senders() { return senders; },
+      async saveSender(s) { if (s.id) { const x = senders.find(y => y.id === s.id); Object.assign(x, s); return x; } const x = { id: id('snd'), active: true, is_default: false, ...s }; senders.push(x); return x; },
+      async jobTemplates(jobId) { return jobTpls.filter(t => t.job_id === jobId); },
+      async saveJobTemplate(jobId, key, dd) { let t = jobTpls.find(x => x.job_id === jobId && x.key === key); if (!t) { t = { job_id: jobId, key }; jobTpls.push(t); } Object.assign(t, dd); return t; },
+      async resetJobTemplate(jobId, key) { const i = jobTpls.findIndex(x => x.job_id === jobId && x.key === key); if (i >= 0) jobTpls.splice(i, 1); },
       async saveTemplate(key, subject, body, enabled) { const t = templates.find(x => x.key === key); if (subject != null) t.subject = subject; if (body != null) t.body = body; if (typeof enabled === 'boolean') t.enabled = enabled; },
       async settings() { return settings; },
       async saveSetting(key, value) { settings.find(s => s.key === key).value = value; },
