@@ -211,13 +211,13 @@
       <div class="modal-sec"><h3>Hiring panel and rounds</h3></div><div id="jpr" style="display:grid;gap:14px"></div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="save">${job ? 'Save changes' : 'Create job'}</button>`);
     m.el.querySelector('.modal').classList.add('wide');
-    const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [] }, team, true);
+    const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [], coord: job?.coordinator_ids || [] }, team, true);
     $('#save', m.el).onclick = async () => {
       const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
         employment_type: $('#je', m.el).value, openings: +$('#jo', m.el).value || 1, jd_text: $('#jx', m.el).value.trim(), client: $('#jc', m.el).value.trim() || null };
       if (!d.title) return toast('Add a job title first.', true);
       const v = ed.value(); if (v.error) return toast(v.error, true);
-      Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds });
+      Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds, coordinator_ids: v.coordinator_ids });
       const btn = $('#save', m.el); btn.disabled = true;
       try { let saved;
             if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; m.close(); toast('Job updated'); route(); }
@@ -332,6 +332,7 @@
   function panelRoundsEditor(host, st, team, canEdit, opts = {}) {
     const dis = canEdit ? '' : 'disabled';
     st.panel = (st.panel || []).filter(id => team.some(t => t.id === id));
+    st.coord = (st.coord || []).filter(id => team.some(t => t.id === id));
     // Rounds used to allow several interviewers; keep only the first (the one whose link is sent)
     st.rounds = JSON.parse(JSON.stringify(st.rounds || [])).map(rd => ({ name: rd.name, duration: rd.duration || 30,
       interviewer_id: (Array.isArray(rd.interviewer_ids) && rd.interviewer_ids[0]) || rd.interviewer_id || null }));
@@ -364,6 +365,9 @@
               ${canEdit ? `<button type="button" class="btn sm ghost" data-rm="${t.id}" aria-label="Remove ${esc(t.full_name)} from the panel" title="Remove">✕</button>` : ''}</div>`).join('')
             || '<div class="small muted">No one on the panel yet.</div>'}</div>
           <a class="small" href="#/settings?tab=panel" data-close>Edit people's meeting links in Settings → Interview panel</a></div>
+        <div class="field"><span class="lbl" style="font-size:13px;font-weight:600">Coordinators</span>
+          <div class="small muted">Get an email whenever a candidate enters a round, together with that round's interviewer, so they can call the candidate and make sure they book. Leave empty for no round emails.</div>
+          <div class="iv-picks" role="group" aria-label="Coordinators" style="margin-top:4px">${team.filter(t => t.active !== false).map(t => `<label class="iv-pick ${st.coord.includes(t.id) ? 'on' : ''}"><input type="checkbox" data-co="${t.id}" ${st.coord.includes(t.id) ? 'checked' : ''} ${dis}>${esc(t.full_name)}</label>`).join('')}</div></div>
         <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
         <div class="small muted" style="margin-top:-6px">Moving a candidate into a round emails them the interviewer's link to book a time. Anyone else can join the call from the shared calendar.</div>
         ${st.rounds.map((rd, i) => { const t = byId(rd.interviewer_id);
@@ -400,6 +404,7 @@
           } catch (e) { fail(e); }
         };
       }
+      $$('[data-co]', host).forEach(n => n.onchange = () => { st.coord = n.checked ? [...new Set([...st.coord, n.dataset.co])] : st.coord.filter(x => x !== n.dataset.co); draw(); changed(); });
       $('#rc', host).onchange = e => { const n = +e.target.value;
         while (st.rounds.length < n) st.rounds.push({ name: ROUND_NAMES[st.rounds.length], duration: 30, interviewer_id: st.panel.length === 1 ? st.panel[0] : null });
         st.rounds = st.rounds.slice(0, n); draw(); changed(); };
@@ -413,7 +418,7 @@
         const rounds = st.rounds.map((rd, i) => ({ name: (rd.name || '').trim() || ROUND_NAMES[i], duration: +rd.duration || 30,
           interviewer_id: rd.interviewer_id || null, interviewer_ids: rd.interviewer_id ? [rd.interviewer_id] : [] }));
         const missing = rounds.findIndex(rd => !rd.interviewer_id);
-        return { error: missing >= 0 ? `Choose an interviewer for Round ${missing + 1}.` : null, hiring_panel: [...st.panel], rounds };
+        return { error: missing >= 0 ? `Choose an interviewer for Round ${missing + 1}.` : null, hiring_panel: [...st.panel], rounds, coordinator_ids: [...st.coord] };
       }
     };
   }
@@ -455,14 +460,14 @@
       saving = true; setState('Saving…');
       try {
         do { again = false; const v = ed.value();
-          await api.updateJob(job.id, { hiring_panel: v.hiring_panel, rounds: v.rounds });
-          job.hiring_panel = v.hiring_panel; job.rounds = v.rounds;
+          await api.updateJob(job.id, { hiring_panel: v.hiring_panel, rounds: v.rounds, coordinator_ids: v.coordinator_ids });
+          job.hiring_panel = v.hiring_panel; job.rounds = v.rounds; job.coordinator_ids = v.coordinator_ids;
           setState(v.error ? `Saved · ${v.error}` : 'All changes saved', !!v.error); } while (again);
         redrawCal(); links();
       } catch (e) { setState('Not saved. Check your connection.', true); fail(e); }
       finally { saving = false; }
     };
-    const ed = panelRoundsEditor($('#pr', body), { panel: job.hiring_panel, rounds: job.rounds }, team, canEdit,
+    const ed = panelRoundsEditor($('#pr', body), { panel: job.hiring_panel, rounds: job.rounds, coord: job.coordinator_ids }, team, canEdit,
       { onChange: () => { setState('Saving…'); clearTimeout(timer); timer = setTimeout(save, 700); } });
     if (CFG.CALCOM_CREATE_URL) {
       const cal = document.createElement('div'); cal.className = 'card'; cal.style.maxWidth = '860px';
