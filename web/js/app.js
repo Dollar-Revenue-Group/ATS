@@ -959,23 +959,76 @@
     const all = await api.interviews();
     const mine = state.me.role === 'interviewer';
     const myEmail = (state.me.email || '').toLowerCase();
-    const list = mine ? all.filter(i => i.interviewer_id === state.me.id || (i.member?.email || '').toLowerCase() === myEmail) : all;
-    const todayOnly = params?.get('day') === 'today', todayStr = new Date().toDateString();
-    const up = list.filter(i => i.status === 'scheduled' && (!todayOnly || new Date(i.scheduled_at).toDateString() === todayStr));
-    const done = todayOnly ? [] : list.filter(i => i.status !== 'scheduled').reverse();
-    const byDay = {}; up.forEach(i => { const k = new Date(i.scheduled_at).toDateString(); (byDay[k] = byDay[k] || []).push(i); });
-    const label = k => { const d = new Date(k), t = new Date(); t.setHours(0, 0, 0, 0); const diff = Math.round((d - t) / 864e5);
-      return diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff < 0 ? d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }) + ' · overdue' : d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }); };
-    const row = i => `<div class="li" data-app="${i.application_id}" tabindex="0"><span class="time">${fmtTime(i.scheduled_at)}</span>${avatar(i.applications?.candidates?.full_name || '?', 32)}
-      <div class="grow"><b>${esc(i.applications?.candidates?.full_name || i.applications?.resumes?.file_name)}</b><span class="small muted">${esc(i.applications?.jobs?.title)} · ${stageName(i.stage_id)} · ${i.duration_min} min · ${esc(ivWho(i))}</span></div>
-      ${i.meeting_link ? `<a class="btn sm" href="${esc(i.meeting_link)}" target="_blank" rel="noopener" data-stop>Join</a>` : ''}${i.status === 'scheduled' ? `<button class="btn sm primary" data-score="${i.id}">Scorecard</button>` : `<span class="small">${'★'.repeat(i.rating || 0)}</span>`}</div>`;
-    el.innerHTML = `<div class="page-head"><div><h1>${mine ? 'My interviews' : 'Interviews'}</h1><p>${up.length} ${todayOnly ? 'today' : 'upcoming'} · candidates book their own times from the email link · reminders go out at 08:00 IST the day before</p></div></div>
-      ${todayOnly ? filterBar(`today's interviews (${up.length})`, '#/interviews') : ''}
-      <div class="card">${Object.keys(byDay).map(k => `<div class="day-h">${label(k)}</div>${byDay[k].map(row).join('')}`).join('') || `<div class="empty">${todayOnly ? 'No interviews scheduled for today.' : 'No upcoming interviews.'}</div>`}</div>
-      ${done.length ? `<div class="card"><div class="card-h"><h3>Completed</h3></div>${done.map(row).join('')}</div>` : ''}`;
-    $$('[data-score]', el).forEach(b => b.onclick = e => { e.stopPropagation(); scorecardFlow(b.dataset.score, () => route()); });
-    $$('[data-stop]', el).forEach(b => b.onclick = e => e.stopPropagation());
-    if (!mine) bindApps(el);
+    let list = mine ? all.filter(i => i.interviewer_id === state.me.id || (i.member?.email || '').toLowerCase() === myEmail) : all;
+    const todayOnly = params?.get('day') === 'today';
+    let view = params?.get('view') || (todayOnly ? 'today' : 'upcoming'), who = 'all';
+    const now = () => Date.now();
+    const endOf = i => new Date(i.scheduled_at).getTime() + (i.duration_min || 30) * 6e4;
+    // What state an interview is in, in plain words
+    const status = i => {
+      if (i.status !== 'scheduled') return { k: 'done', t: i.status === 'cancelled' ? 'Cancelled' : 'Done', c: i.status === 'cancelled' ? 'muted' : 'ok' };
+      const st = new Date(i.scheduled_at).getTime(), en = endOf(i), n = now();
+      if (n >= st && n <= en) return { k: 'live', t: 'Happening now', c: 'live' };
+      if (n > en) return { k: 'score', t: 'Add your scorecard', c: 'warn' };
+      const m = Math.round((st - n) / 6e4);
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0); const d0 = new Date(i.scheduled_at); d0.setHours(0, 0, 0, 0); const days = Math.round((d0 - t0) / 864e5);
+      return { k: 'soon', t: m < 60 ? `Starts in ${m} min` : days === 0 ? `Starts in ${Math.floor(m / 60)} h ${m % 60} min` : days === 1 ? 'Tomorrow' : `In ${days} days`, c: m <= 15 ? 'live' : 'info' };
+    };
+    const roundOf = i => { const n = i.round_no || STAGE_ROUND[i.stage_id] || 1; const rd = (i.applications?.jobs?.rounds || [])[n - 1];
+      return `Round ${n}${rd?.name ? ' · ' + rd.name : ''}`; };
+    const jobOf = i => { const j = i.applications?.jobs || {}; return (j.title || '') + (j.client ? ` (${j.client})` : ''); };
+    const nameOf = i => i.applications?.candidates?.full_name || i.applications?.resumes?.file_name || 'Candidate';
+    const people = [...new Set(list.map(ivWho).filter(Boolean))].sort();
+    const dayLabel = k => { const d = new Date(k), t = new Date(); t.setHours(0, 0, 0, 0); const diff = Math.round((d - t) / 864e5);
+      const nice = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+      return diff === 0 ? `Today · ${nice}` : diff === 1 ? `Tomorrow · ${nice}` : nice; };
+    let timer = null;
+    const draw = () => {
+      const pool = list.filter(i => who === 'all' || ivWho(i) === who);
+      const scheduled = pool.filter(i => i.status === 'scheduled').sort((x, y) => x.scheduled_at.localeCompare(y.scheduled_at));
+      const toScore = scheduled.filter(i => status(i).k === 'score');
+      const upcoming = scheduled.filter(i => status(i).k !== 'score');
+      const today = upcoming.filter(i => new Date(i.scheduled_at).toDateString() === new Date().toDateString());
+      const week = upcoming.filter(i => new Date(i.scheduled_at).getTime() - now() < 7 * 864e5);
+      const done = pool.filter(i => i.status !== 'scheduled').sort((x, y) => y.scheduled_at.localeCompare(x.scheduled_at));
+      const next = upcoming[0];
+      const shown = view === 'score' ? toScore : view === 'done' ? done : view === 'today' ? today : upcoming;
+      const byDay = {}; shown.forEach(i => { const k = new Date(i.scheduled_at).toDateString(); (byDay[k] = byDay[k] || []).push(i); });
+      const card = i => { const s = status(i), n = nameOf(i);
+        return `<article class="iv-card ${s.k}" data-app="${i.application_id}" tabindex="0">
+          <div class="iv-time"><b>${fmtTime(i.scheduled_at)}</b><span>${tzShort(i.scheduled_at)} · ${i.duration_min || 30} min</span></div>
+          <div class="iv-main">${avatar(n, 40)}<div class="iv-who"><b>${esc(n)}</b>
+              <span class="small muted">${esc(jobOf(i))}</span>
+              <span class="iv-tags"><span class="iv-tag round">${esc(roundOf(i))}</span>${ivWho(i) ? `<span class="iv-tag">${icon('people', 12)}${esc(ivWho(i))}</span>` : ''}${i.status === 'scheduled' && !i.meeting_link ? '<span class="iv-tag warn">No meeting link</span>' : ''}</span></div></div>
+          <div class="iv-side"><span class="iv-status ${s.c}">${s.k === 'live' ? '<i class="dot"></i>' : ''}${esc(s.t)}</span>
+            ${s.k === 'done' && i.rating ? `<span class="iv-stars" title="${i.rating} out of 5">${'★'.repeat(i.rating)}<span class="muted">${'★'.repeat(5 - i.rating)}</span></span>` : ''}
+            <div class="iv-actions">${i.meeting_link && s.k !== 'done' ? `<a class="btn sm ${s.k === 'live' ? 'primary' : ''}" href="${esc(i.meeting_link)}" target="_blank" rel="noopener" data-stop>${icon('cal', 14)}Join</a>` : ''}
+              ${i.status === 'scheduled' ? `<button class="btn sm ${s.k === 'score' ? 'primary' : ''}" data-score="${i.id}">${icon('check', 14)}Scorecard</button>` : ''}
+              <button class="btn sm ghost" data-open="${i.application_id}">Profile</button></div></div></article>`; };
+      const tile = (k, n, label, hint) => `<button class="iv-tile ${view === k ? 'on' : ''} ${k === 'score' && n ? 'warn' : ''}" data-view="${k}"><b>${n}</b><span>${label}</span><small>${hint}</small></button>`;
+      el.innerHTML = `<div class="page-head"><div><h1>${mine ? 'My interviews' : 'Interviews'}</h1>
+          <p>Candidates pick their own time from the email link. Each booking appears here, and a reminder goes out at 08:00 IST the day before.</p></div>
+          ${!mine && people.length > 1 ? `<select class="input" id="ivwho" style="width:auto;min-width:200px" aria-label="Interviewer"><option value="all">Everyone's interviews</option>${people.map(p => `<option ${p === who ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : ''}</div>
+        ${next ? (() => { const s = status(next); return `<section class="iv-next ${s.k === 'live' ? 'live' : ''}"><div class="iv-next-l"><span class="eyebrow">${s.k === 'live' ? 'Happening now' : 'Next interview'}</span>
+            <h2>${esc(nameOf(next))}</h2><div class="muted">${esc(jobOf(next))} · ${esc(roundOf(next))}${ivWho(next) ? ' · with ' + esc(ivWho(next)) : ''}</div>
+            <div class="iv-next-when">${icon('cal', 16)}<b>${new Date(next.scheduled_at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}, ${fmtTime(next.scheduled_at)} ${tzShort(next.scheduled_at)}</b><span class="iv-status ${s.c}">${s.k === 'live' ? '<i class="dot"></i>' : ''}${esc(s.t)}</span></div></div>
+          <div class="iv-next-r">${next.meeting_link ? `<a class="btn primary" href="${esc(next.meeting_link)}" target="_blank" rel="noopener">${icon('cal', 16)}Join meeting</a>` : '<span class="small muted">No meeting link yet</span>'}
+            <button class="btn" data-open="${next.application_id}">Open profile and resume</button></div></section>`; })() : ''}
+        <div class="iv-tiles">${tile('today', today.length, 'Today', 'interviews today')}${tile('upcoming', upcoming.length, 'Coming up', week.length + ' in the next 7 days')}${tile('score', toScore.length, 'Need a scorecard', 'time has passed')}${tile('done', done.length, 'Done', 'with scorecards')}</div>
+        ${view === 'score' && toScore.length ? '<div class="card card-b small" style="margin-bottom:12px;border-left:3px solid var(--review)">These interviews have finished but nobody has added a scorecard yet. Click <b>Scorecard</b> to rate the candidate, or open their profile to move them on.</div>' : ''}
+        <div class="iv-list">${Object.keys(byDay).map(k => `<div class="iv-day">${esc(dayLabel(k))}<span>${byDay[k].length}</span></div>${byDay[k].map(card).join('')}`).join('')
+          || `<div class="card empty">${view === 'score' ? 'All caught up: every finished interview has a scorecard.' : view === 'done' ? 'No finished interviews yet.' : view === 'today' ? 'No interviews today.' : 'No upcoming interviews. Move a candidate into a round and they get a link to book.'}</div>`}</div>`;
+      $$('[data-view]', el).forEach(b => b.onclick = () => { view = b.dataset.view; draw(); });
+      const ws = $('#ivwho', el); if (ws) ws.onchange = () => { who = ws.value; draw(); };
+      $$('[data-score]', el).forEach(b => b.onclick = e => { e.stopPropagation(); scorecardFlow(b.dataset.score, () => route()); });
+      $$('[data-stop]', el).forEach(b => b.onclick = e => e.stopPropagation());
+      $$('[data-open]', el).forEach(b => b.onclick = e => { e.stopPropagation(); openCandidate(b.dataset.open); });
+      if (!mine) $$('.iv-card[data-app]', el).forEach(k => { k.onclick = () => openCandidate(k.dataset.app); k.onkeydown = e => e.key === 'Enter' && openCandidate(k.dataset.app); });
+    };
+    draw();
+    // keep "Starts in…" fresh while this page is open
+    const route0 = state.run;
+    timer = setInterval(() => { if (state.run !== route0 || !document.body.contains(el)) return clearInterval(timer); if (!document.querySelector('.scrim')) draw(); }, 60000);
   }
 
   /* ───────── settings ───────── */

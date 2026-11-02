@@ -158,7 +158,7 @@
 
       async interviews() {
         return ok(await sb.from('interviews')
-          .select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email), applications(id, job_id, jobs(title), candidates(full_name,email), resumes(file_name))')
+          .select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email), applications(id, job_id, jobs(title,client,rounds), candidates(full_name,email,phone), resumes(file_name))')
           .order('scheduled_at'));
       },
       async schedule(iv, currentStage) {

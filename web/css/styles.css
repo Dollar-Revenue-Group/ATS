@@ -443,3 +443,53 @@ details.card[open]>summary h3::before{content:'▾ '}
 .viewer-text pre{white-space:pre-wrap;word-break:break-word;font:inherit;font-size:14px;line-height:1.6;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
 @media (max-width:640px){.viewer-scrim{padding:0}.viewer{height:100vh;border-radius:0}.viewer-h a#vnew{display:none}}
 .viewer-h .grow{flex:1}
+
+/* Interviews page */
+.iv-next{display:flex;gap:20px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:20px 22px;margin-bottom:16px;border-radius:16px;border:1px solid var(--line);
+  background:linear-gradient(135deg,var(--accent-soft),transparent 70%),var(--surface)}
+.iv-next.live{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.iv-next h2{margin:4px 0 2px;font-size:22px}
+.iv-next-l{display:grid;gap:2px;min-width:0}
+.iv-next-when{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:15px}
+.iv-next-when svg{color:var(--accent-strong)}
+.iv-next-r{display:flex;gap:8px;flex-wrap:wrap}
+.iv-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.iv-tile{display:grid;gap:2px;text-align:left;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:inherit;font:inherit;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.iv-tile b{font-size:26px;line-height:1.1}
+.iv-tile span{font-weight:600}
+.iv-tile small{color:var(--muted);font-size:12px}
+.iv-tile:hover{border-color:var(--line-2)}
+.iv-tile.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.iv-tile.warn b{color:var(--review)}
+.iv-list{display:grid;gap:8px}
+.iv-day{display:flex;align-items:center;gap:8px;margin:10px 2px 2px;font-weight:700;font-size:14px}
+.iv-day span{font-size:12px;font-weight:600;padding:1px 8px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+.iv-card{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:16px;align-items:center;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--surface);cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.iv-card:hover{border-color:var(--line-2);box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.iv-card.live{border-color:var(--accent)}
+.iv-card.score{border-left:4px solid var(--review)}
+.iv-card.done{opacity:.85}
+.iv-time{display:grid;gap:2px;padding-right:14px;border-right:1px solid var(--line)}
+.iv-time b{font-size:19px;font-variant-numeric:tabular-nums}
+.iv-time span{font-size:12px;color:var(--muted)}
+.iv-main{display:flex;align-items:center;gap:12px;min-width:0}
+.iv-who{display:grid;gap:2px;min-width:0}
+.iv-who b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iv-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.iv-tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:2px 8px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2,inherit)}
+.iv-tag.round{background:var(--accent-soft);border-color:transparent;color:var(--accent-strong);font-weight:600}
+.iv-tag.warn{color:var(--review);border-color:var(--review)}
+.iv-side{display:grid;justify-items:end;gap:8px}
+.iv-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.iv-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.iv-status.info{background:rgba(59,130,246,.12);color:var(--info,#2563eb)}
+.iv-status.live{background:var(--accent-soft);color:var(--accent-strong)}
+.iv-status.warn{background:rgba(234,179,8,.15);color:var(--review)}
+.iv-status.ok{background:var(--accent-soft);color:var(--accent-strong)}
+.iv-status.muted{background:var(--surface-2);color:var(--muted)}
+.iv-status .dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:ivpulse 1.4s infinite}
+@keyframes ivpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.iv-stars{color:#f59e0b;letter-spacing:1px;font-size:14px}
+@media (max-width:900px){.iv-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:700px){.iv-card{grid-template-columns:minmax(0,1fr)}.iv-time{display:flex;gap:8px;align-items:baseline;border-right:0;padding-right:0}.iv-side{justify-items:start}.iv-actions{justify-content:flex-start}}
+@media (prefers-reduced-motion:reduce){.iv-status .dot{animation:none}}
