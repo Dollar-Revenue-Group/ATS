@@ -1,0 +1,6 @@
+# DRG ATS portal · static site, no build step
+# main    -> production (drg-ats.netlify.app)
+# staging -> branch deploy (staging--drg-ats.netlify.app), free on Netlify's credit plans
+[build]
+  publish = "web"
+  command = ""
