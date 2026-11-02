@@ -1,0 +1,114 @@
+/* DRG careers · built on the DRG Brand Guidelines 2026
+   Casual Black base, Malachite signal, White for reading, Lime only for highlights.
+   Montserrat only: ExtraBold headlines, Bold subheads, SemiBold caps labels, Regular body. */
+:root,:root[data-theme="dark"],:root[data-theme="light"]{
+  --black:#191919; --graphite:#2A2A2A; --ash:#8A8A8A; --mist:#F4F4F2; --white:#FFFFFF;
+  --malachite:#1BDF4D; --lime:#D9E021;
+  --bg:var(--black); --surface:rgba(34,34,34,.88); --surface-2:rgba(16,16,16,.55); --ink:var(--white); --ink-2:var(--white);
+  --read:#E4E4E1; --muted:#A3A3A0;
+  --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.22);
+  --accent:var(--malachite); --accent-ink:var(--black); --accent-soft:rgba(27,223,77,.12); --accent-strong:#4BE872;
+  --pass:var(--malachite); --pass-soft:rgba(27,223,77,.12); --review:var(--lime); --review-soft:rgba(217,224,33,.14);
+  --disq:#FF8A7A; --disq-soft:rgba(255,138,122,.14);
+  --display:Montserrat,Arial,sans-serif; --body:Montserrat,Arial,sans-serif;
+  --r:0; --r-lg:0; --shadow:none; --shadow-lg:none;
+  --cut:14px;
+  color-scheme:dark;
+}
+html{color-scheme:dark}
+body{background-color:var(--bg);background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:64px 64px;background-attachment:fixed;color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;position:relative;isolation:isolate}
+/* the DRG mark as a faint shadow behind the whole page */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:url("/assets/drg-mark-light.png") no-repeat center center / min(88vw,980px) auto;opacity:.035}
+a{color:var(--accent)}
+
+/* header + hero */
+.careers-hero{background:transparent;color:var(--ink);padding:40px 20px 8px}
+.careers-hero .in{max-width:760px;gap:0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.top .logo img{width:150px;height:auto;display:block}
+.pill{background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:12px;letter-spacing:.2em;padding:10px 16px}
+.eyebrow{margin-top:56px;color:var(--accent);font-weight:600;font-size:13px;letter-spacing:.2em;text-transform:uppercase}
+.careers-hero h1{margin:10px 0 14px;font-size:clamp(38px,8vw,64px);line-height:1.04;font-weight:800;letter-spacing:-.02em;color:var(--ink);max-width:none}
+.careers-hero p{color:var(--muted);font-size:17px;font-weight:400;max-width:60ch;margin:0}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;color:var(--ink)!important;font-weight:500!important}
+.hero-meta .dot{width:8px;height:8px;background:var(--lime);display:inline-block}
+.hero-cta{margin-top:26px;justify-self:start}
+
+/* layout */
+.careers-wrap{max-width:800px;margin:36px auto 80px;padding:0 20px;gap:28px}
+.c-foot{max-width:800px;padding:22px 20px 40px;color:var(--ash)}
+
+/* panels: signature 45° corner cut from the G */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:0;box-shadow:none}
+.panel{padding:32px;gap:20px}
+.panel h2,.card.panel>div>h2{color:var(--accent);font-weight:600;font-size:13px;letter-spacing:.2em;text-transform:uppercase}
+.role{padding:24px 28px;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%)}
+.role h2{font-size:24px;font-weight:800;letter-spacing:-.01em}
+.role:hover{transform:none;border-color:var(--accent)}
+.role .tag{background:transparent;border:1px solid var(--line-2);color:var(--read)}
+.empty{color:var(--muted)}
+
+/* job description: built for reading the whole thing */
+.jd-card{padding:40px 44px}
+.jd{white-space:normal;font-size:17px;line-height:1.75;color:var(--read);display:grid;gap:40px}
+.jd p{margin:0;max-width:66ch}
+.jd p+p{margin-top:16px}
+.jd a{color:var(--accent);font-weight:600;word-break:break-word}
+.jd-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin:0}
+.jd-facts div{background:var(--surface-2);padding:16px 18px;display:grid;gap:6px}
+.jd-facts dt{font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--ash)}
+.jd-facts dd{margin:0;font-size:15px;font-weight:700;color:var(--white);line-height:1.35}
+.jd-sec{display:grid;gap:18px}
+.jd-sec h3{font-family:var(--display);font-size:24px;font-weight:700;color:var(--white);letter-spacing:-.01em;line-height:1.2;display:grid;gap:14px}
+.jd-sec h3::after{content:"";width:44px;height:3px;background:var(--accent)}
+.jd-list{list-style:none;margin:0;padding:0;display:grid;gap:14px;max-width:68ch}
+.jd-list li{position:relative;padding-left:26px}
+.jd-list li::before{content:"";position:absolute;left:0;top:.62em;width:9px;height:9px;background:var(--accent)}
+.jd .must{color:var(--lime);font-weight:700}
+.jd-apply{background:var(--surface-2);border:1px solid var(--line);padding:26px 28px;justify-items:start;gap:14px}
+.jd-apply p{color:var(--read)}
+
+/* form */
+.field{gap:8px}
+.field label,.field .lbl{font-weight:600!important;font-size:15px!important;color:var(--ink)}
+.field>span:first-child,.panel>.field>span{font-size:15px!important;font-weight:600!important}
+.req{color:var(--accent);margin-left:2px}
+.help{font-size:13.5px;color:var(--muted);margin:0}
+.input,select.input,textarea.input{font:inherit;font-size:16px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line-2);border-radius:0;padding:12px 14px;min-height:50px}
+textarea.input{min-height:130px}
+.input::placeholder{color:rgba(255,255,255,.38)}
+.input:focus,.input:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-color:var(--line-2)}
+.grid2{gap:20px}
+.file-pick{border-radius:0;border:1px dashed rgba(255,255,255,.3);background:var(--surface-2);padding:16px}
+input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px}
+.err-msg{color:var(--disq)}
+
+/* buttons, filters, chips */
+.btn{border-radius:0;font-weight:700}
+.btn.primary{font-weight:800;font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);padding:17px 32px;min-height:54px;
+  clip-path:polygon(0 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%)}
+.btn.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+.seg{border-radius:0;background:transparent}
+.seg button{font-weight:600;font-size:13px;color:var(--muted);padding:9px 14px}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.chip{border-radius:0;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.tag{border-radius:0}
+
+/* booking */
+.day,.slot,.confirm{border-radius:0}
+.day,.slot{background:var(--surface-2)}
+
+@media (max-width:640px){
+  .careers-hero{padding:28px 20px 4px}
+  .top .logo img{width:124px}
+  .eyebrow{margin-top:40px}
+  .panel{padding:22px}
+  .jd-card{padding:26px 20px}
+  .jd{font-size:16px;gap:34px}
+  .jd-sec h3{font-size:21px}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .role{padding:20px}
+  body::before{background-size:90vw auto;opacity:.04}
+}
+@media (prefers-reduced-motion:reduce){.jd-sec{scroll-behavior:auto}}

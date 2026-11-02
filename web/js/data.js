@@ -63,6 +63,16 @@
           return { ...j, total: mine.length, byStage };
         });
       },
+      async connectCal(memberId, apiKey) {
+        const res = await callN8n(cfg.CALCOM_CONNECT_URL, { member_id: memberId, action: 'connect', api_key: apiKey });
+        if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not connect Cal.com.');
+        return res;
+      },
+      async disconnectCal(memberId) {
+        const res = await callN8n(cfg.CALCOM_CONNECT_URL, { member_id: memberId, action: 'disconnect' });
+        if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not disconnect Cal.com.');
+        return res;
+      },
       async createCalLink(jobId, round) {
         const res = await callN8n(cfg.CALCOM_CREATE_URL, { job_id: jobId, round: round || 1 });
         if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not create the Cal.com link.');
@@ -101,7 +111,7 @@
       async application(id) {
         // All five reads run in parallel so the candidate drawer opens in one round trip
         const [appRes, scr, ivs, act, mails] = await Promise.all([
-          sb.from('applications').select('*, jobs(id,title,rounds), candidates(*), resumes(id,file_name,storage_path,uploaded_at)').eq('id', id).single(),
+          sb.from('applications').select('*, jobs(id,title,client,rounds,cal_links,interview_scoring), candidates(*), resumes(id,file_name,storage_path,uploaded_at)').eq('id', id).single(),
           sb.from('ai_screenings').select('*').eq('application_id', id).order('created_at', { ascending: false }).limit(1),
           sb.from('interviews').select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email)').eq('application_id', id).order('scheduled_at'),
           sb.from('activity_log').select('*').eq('application_id', id).order('created_at', { ascending: false }),
@@ -115,6 +125,7 @@
         return d.signedUrl;
       },
       async fileUrl(path) { return this.resumeUrl(path); },
+      async resumeText(resumeId) { const r = ok(await sb.from('resumes').select('raw_text').eq('id', resumeId).maybeSingle()); return r?.raw_text || ''; },
       async moveStage(appId, stageId, reason) {
         const status = stageId === 7 ? 'rejected' : stageId === 6 ? 'hired' : 'active';
         ok(await sb.from('applications').update({ stage_id: stageId, status, rejection_reason: reason || null }).eq('id', appId));
@@ -147,7 +158,7 @@
 
       async interviews() {
         return ok(await sb.from('interviews')
-          .select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email), applications(id, job_id, jobs(title), candidates(full_name,email), resumes(file_name))')
+          .select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email), applications(id, job_id, jobs(title,client,rounds), candidates(full_name,email,phone), resumes(file_name))')
           .order('scheduled_at'));
       },
       async schedule(iv, currentStage) {
@@ -170,6 +181,25 @@
                   : ok(await sb.from('team_members').insert(d).select().single());
       },
       async setRole(id, role) { ok(await sb.from('profiles').update({ role }).eq('id', id)); },
+      async senders() { return ok(await sb.from('email_senders').select('*').order('is_default', { ascending: false }).order('from_name')); },
+      async saveSender(s) {
+        const { id, ...d } = s;
+        return id ? ok(await sb.from('email_senders').update(d).eq('id', id).select().single())
+                  : ok(await sb.from('email_senders').insert(d).select().single());
+      },
+      async jobTemplates(jobId) { return ok(await sb.from('job_email_templates').select('*').eq('job_id', jobId)); },
+      async saveJobTemplate(jobId, key, d) {
+        return ok(await sb.from('job_email_templates').upsert({ job_id: jobId, key, ...d, updated_at: new Date().toISOString() }, { onConflict: 'job_id,key' }).select().single());
+      },
+      async resetJobTemplate(jobId, key) { ok(await sb.from('job_email_templates').delete().eq('job_id', jobId).eq('key', key)); },
+      async interviewScores(appId) { return ok(await sb.from('interview_scores').select('*').eq('application_id', appId).order('created_at')); },
+      async jobInterviewScores(jobId) { return ok(await sb.from('interview_scores').select('id,ratings,score').eq('job_id', jobId)); },
+      async saveInterviewScore(r) {
+        const { id, ...d } = r; d.updated_at = new Date().toISOString();
+        return id ? ok(await sb.from('interview_scores').update(d).eq('id', id).select().single())
+                  : ok(await sb.from('interview_scores').insert(d).select().single());
+      },
+      async deleteInterviewScore(id) { ok(await sb.from('interview_scores').delete().eq('id', id)); },
       async templates() { return ok(await sb.from('email_templates').select('*').order('sort').order('key')); },
       async saveTemplate(key, subject, body, enabled) {
         const d = { updated_at: new Date().toISOString() };
@@ -236,7 +266,7 @@
     });
     const jobs = [
       { id: 'j1', title: 'Sales Development Representative', department: 'Sales', location: 'Ahmedabad · Hybrid', employment_type: 'Full-time', status: 'open', openings: 2, hiring_manager_id: 'u3', created_at: iso(now - 21 * day),
-        jd_text: 'We are hiring an SDR to open conversations with B2B decision makers for our clients.\n\nWhat you will do\n• Run outbound calls, email and LinkedIn sequences\n• Book qualified meetings for Account Executives\n• Keep HubSpot clean and up to date\n\nWhat you bring\n• 2+ years in B2B sales or SDR roles\n• Comfort with daily cold calling\n• Clear written English', rules: { id: 'r1', version: 3, ...sdrRules } },
+        jd_text: 'We are hiring an SDR to open conversations with B2B decision makers for our clients.\n\nWhat you will do\n• Run outbound calls, email and LinkedIn sequences\n• Book qualified meetings for Account Executives\n• Keep HubSpot clean and up to date\n\nWhat you bring\n• 2+ years in B2B sales or SDR roles\n• Comfort with daily cold calling\n• Clear written English', rules: { id: 'r1', version: 3, ...sdrRules }, interview_scoring: { criteria: [{ key: 'attitude', name: 'Attitude', hint: 'Energy, ownership and how they handle pushback', weight: 2, min: 3 }, { key: 'experience_with_plays', name: 'Experience with plays', hint: 'How they have built and run outbound plays', weight: 2, min: 0 }, { key: 'signal_detection', name: 'Signal detection', hint: 'Spotting buying signals and acting on them', weight: 1, min: 0 }], mode: 'weighted', formula: '', hire: 70, maybe: 50 } },
       { id: 'j2', title: 'Account Executive', department: 'Sales', location: 'Remote · India', employment_type: 'Full-time', status: 'open', openings: 1, hiring_manager_id: 'u3', created_at: iso(now - 14 * day),
         jd_text: 'Own the full sales cycle for mid-market SaaS deals, from discovery to close.', rules: { id: 'r2', version: 1, ...genericRules('3+ years closing B2B deals', 'Closing record with numbers', 'Mid-market SaaS experience', 'Discovery and demo skills') } },
       { id: 'j3', title: 'Marketing Operations Specialist', department: 'Marketing', location: 'Ahmedabad', employment_type: 'Full-time', status: 'open', openings: 1, hiring_manager_id: 'u3', created_at: iso(now - 9 * day),
@@ -256,7 +286,7 @@
       review: ['Some outbound work, but mostly inbound follow-up.', 'Mentions targets but gives no figures.', 'Adjacent industry (fintech).', 'Clear, though long.'],
       low_fit: ['Little evidence of outbound prospecting.', 'No targets mentioned.', 'Retail background.', 'Several unclear sections.']
     };
-    const candidates = [], applications = [], screenings = [], resumes = [], activity = [], emails = [], interviews = [];
+    const candidates = [], applications = [], screenings = [], resumes = [], activity = [], emails = [], interviews = []; const iscores = [];
     plan.forEach(([jobId, stage, score, verdict], i) => {
       const n = names[i]; const created = now - (20 - i * 0.8) * day;
       const cid = `c${i}`, aid = `a${i}`, rid = `rs${i}`;
@@ -311,8 +341,10 @@
       { key: 'n8n_new_application_url', value: 'https://automation.drg.example/webhook/ats/new-application', description: 'n8n Workflow 1 webhook URL' },
       { key: 'n8n_webhook_secret', value: '••••••••••••', description: 'Shared secret sent as x-ats-secret to n8n' }
     ];
-    const team = people.slice(0, 4).map(p => ({ id: 'tm-' + p.id, full_name: p.full_name, email: p.email, title: p.role.replace('_', ' '), timezone: 'Asia/Kolkata',
+    const team = people.slice(0, 4).map((p, k) => ({ id: 'tm-' + p.id, cal_account: k < 2 ? 'demo' : null, full_name: p.full_name, email: p.email, title: p.role.replace('_', ' '), timezone: 'Asia/Kolkata',
       meeting_link: 'https://meet.google.com/abc-defg-hij', booking_url: null, active: true, availability: { slot: 30, days: { 1: [['10:00', '18:00']], 2: [['10:00', '18:00']], 3: [['10:00', '18:00']], 4: [['10:00', '18:00']], 5: [['10:00', '18:00']] } } }));
+    const senders = [{ id: 'snd-default', from_name: 'DRG Talent Team', from_email: null, reply_to: null, is_default: true, active: true }];
+    const jobTpls = [];
     let signedIn = true;
     const wait = (ms = 120) => new Promise(r => setTimeout(r, ms));
     const cardOf = a => {
@@ -321,6 +353,7 @@
       return { id: a.id, job_id: a.job_id, stage_id: a.stage_id, status: a.status, created_at: a.created_at, updated_at: a.updated_at, candidate_id: a.candidate_id,
         full_name: c.full_name || (r.file_name || 'New applicant').replace(/\.(pdf|docx)$/i, '').replace(/[_-]+/g, ' '), email: c.email, total_exp_years: c.total_exp_years, source: c.source, file_name: r.file_name,
         score: s.score ?? null, verdict: s.verdict ?? null, summary: s.summary ?? null,
+        ...(() => { const xs = iscores.filter(x => x.application_id === a.id && x.score != null); return xs.length ? { iscore: Math.round(xs.reduce((t, x) => t + +x.score, 0) / xs.length), iscore_n: xs.length } : {}; })(),
         ...(() => { const iv = interviews.filter(i => i.application_id === a.id && i.status === 'scheduled' && i.stage_id === a.stage_id).sort((p, q) => p.scheduled_at.localeCompare(q.scheduled_at))[0];
           return iv ? { interview_at: iv.scheduled_at, interview_stage: iv.stage_id, interviewer_name: (people.find(p => p.id === iv.interviewer_id) || {}).full_name || null } : {}; })() };
     };
@@ -361,7 +394,7 @@
       async application(aid) {
         await wait();
         const a = applications.find(x => x.id === aid); const job = jobs.find(j => j.id === a.job_id);
-        return { ...a, jobs: { id: job.id, title: job.title }, candidates: candidates.find(c => c.id === a.candidate_id), resumes: resumes.find(r => r.id === a.resume_id),
+        return { ...a, jobs: { id: job.id, title: job.title, client: job.client, rounds: job.rounds, cal_links: job.cal_links, interview_scoring: job.interview_scoring }, candidates: candidates.find(c => c.id === a.candidate_id), resumes: resumes.find(r => r.id === a.resume_id),
           screening: screenings.filter(s => s.application_id === aid).sort((p, q) => q.created_at.localeCompare(p.created_at))[0] || null,
           interviews: interviews.filter(i => i.application_id === aid).map(i => ({ ...i, interviewer: people.find(p => p.id === i.interviewer_id) })),
           activity: activity.filter(x => x.application_id === aid).sort((p, q) => q.created_at.localeCompare(p.created_at)),
@@ -404,10 +437,23 @@
       async scorecard(ivid, d) { Object.assign(interviews.find(i => i.id === ivid), d, { status: 'completed' }); emit(); },
       async profiles() { return people; },
       async team() { return team; },
+      async connectCal(mid, key) { const t = team.find(x => x.id === mid); Object.assign(t, { cal_key_id: 'demo', cal_username: 'demo-' + t.full_name.split(' ')[0].toLowerCase(), cal_account: t.cal_account || 'demo', cal_connected_at: iso(Date.now()) }); return { ok: true, message: 'Connected (demo)', webhook: true }; },
+      async disconnectCal(mid) { Object.assign(team.find(x => x.id === mid), { cal_key_id: null, cal_account: null, cal_connected_at: null }); return { ok: true, message: 'Disconnected (demo)' }; },
+      async createCalLink(jobId, round) { await new Promise(r => setTimeout(r, 400)); return { ok: true, booking_url: `https://cal.com/demo/drg-${jobId}-r${round}-interview`, event_type_id: 1, account: 'demo', message: 'Demo link' }; },
       async saveMember(m) { if (m.id) { Object.assign(team.find(t => t.id === m.id), m); return m; } const t = { id: id('tm'), active: true, ...m }; team.push(t); return t; },
       async fileUrl() { return null; },
+      async resumeText() { return 'Sample resume text (demo).\n\nExperience\n- 3 years as an SDR at Acme SaaS\n- HubSpot, Apollo, Clay'; },
       async setRole(uid, role) { people.find(p => p.id === uid).role = role; },
       async templates() { return templates; },
+      async senders() { return senders; },
+      async saveSender(s) { if (s.id) { const x = senders.find(y => y.id === s.id); Object.assign(x, s); return x; } const x = { id: id('snd'), active: true, is_default: false, ...s }; senders.push(x); return x; },
+      async jobTemplates(jobId) { return jobTpls.filter(t => t.job_id === jobId); },
+      async saveJobTemplate(jobId, key, dd) { let t = jobTpls.find(x => x.job_id === jobId && x.key === key); if (!t) { t = { job_id: jobId, key }; jobTpls.push(t); } Object.assign(t, dd); return t; },
+      async resetJobTemplate(jobId, key) { const i = jobTpls.findIndex(x => x.job_id === jobId && x.key === key); if (i >= 0) jobTpls.splice(i, 1); },
+      async interviewScores(aid) { return iscores.filter(x => x.application_id === aid); },
+      async jobInterviewScores(jid) { return iscores.filter(x => x.job_id === jid); },
+      async saveInterviewScore(r) { let x = r.id && iscores.find(y => y.id === r.id); if (!x) { x = { id: id('isc'), scored_by: people[0].id, created_at: new Date().toISOString() }; iscores.push(x); } Object.assign(x, r, { updated_at: new Date().toISOString() }); emit(); return x; },
+      async deleteInterviewScore(sid) { const i = iscores.findIndex(x => x.id === sid); if (i >= 0) iscores.splice(i, 1); emit(); },
       async saveTemplate(key, subject, body, enabled) { const t = templates.find(x => x.key === key); if (subject != null) t.subject = subject; if (body != null) t.body = body; if (typeof enabled === 'boolean') t.enabled = enabled; },
       async settings() { return settings; },
       async saveSetting(key, value) { settings.find(s => s.key === key).value = value; },

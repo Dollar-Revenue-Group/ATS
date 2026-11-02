@@ -1,0 +1,7 @@
+# DRG careers site (careers.dollarrevenuegroup.com) · static, no build step
+# Netlify project drg-careers uses this folder as its base directory:
+#   main    -> production (careers.dollarrevenuegroup.com)
+#   staging -> branch deploy (staging--drg-careers.netlify.app)
+[build]
+  publish = "."
+  command = ""
