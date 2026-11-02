@@ -311,7 +311,7 @@
       { key: 'n8n_new_application_url', value: 'https://automation.drg.example/webhook/ats/new-application', description: 'n8n Workflow 1 webhook URL' },
       { key: 'n8n_webhook_secret', value: '••••••••••••', description: 'Shared secret sent as x-ats-secret to n8n' }
     ];
-    const team = people.slice(0, 4).map(p => ({ id: 'tm-' + p.id, full_name: p.full_name, email: p.email, title: p.role.replace('_', ' '), timezone: 'Asia/Kolkata',
+    const team = people.slice(0, 4).map((p, k) => ({ id: 'tm-' + p.id, cal_account: k < 2 ? 'demo' : null, full_name: p.full_name, email: p.email, title: p.role.replace('_', ' '), timezone: 'Asia/Kolkata',
       meeting_link: 'https://meet.google.com/abc-defg-hij', booking_url: null, active: true, availability: { slot: 30, days: { 1: [['10:00', '18:00']], 2: [['10:00', '18:00']], 3: [['10:00', '18:00']], 4: [['10:00', '18:00']], 5: [['10:00', '18:00']] } } }));
     let signedIn = true;
     const wait = (ms = 120) => new Promise(r => setTimeout(r, ms));
@@ -404,6 +404,7 @@
       async scorecard(ivid, d) { Object.assign(interviews.find(i => i.id === ivid), d, { status: 'completed' }); emit(); },
       async profiles() { return people; },
       async team() { return team; },
+      async createCalLink(jobId, round) { await new Promise(r => setTimeout(r, 400)); return { ok: true, booking_url: `https://cal.com/demo/drg-${jobId}-r${round}-interview`, event_type_id: 1, account: 'demo', message: 'Demo link' }; },
       async saveMember(m) { if (m.id) { Object.assign(team.find(t => t.id === m.id), m); return m; } const t = { id: id('tm'), active: true, ...m }; team.push(t); return t; },
       async fileUrl() { return null; },
       async setRole(uid, role) { people.find(p => p.id === uid).role = role; },

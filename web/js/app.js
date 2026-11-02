@@ -215,8 +215,11 @@
       const v = ed.value(); if (v.error) return toast(v.error, true);
       Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds });
       const btn = $('#save', m.el); btn.disabled = true;
-      try { if (job) { await api.updateJob(job.id, d); m.close(); toast('Job updated'); route(); }
-            else { const j = await api.createJob(d); m.close(); toast('Job created. Now write the AI screening brief.'); location.hash = `#/jobs/${j.id}?tab=brief`; } }
+      try { let saved;
+            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; m.close(); toast('Job updated'); route(); }
+            else { saved = await api.createJob(d); m.close(); toast('Job created. Now write the AI screening brief.'); location.hash = `#/jobs/${saved.id}?tab=brief`; }
+            ensureCalLinks({ ...saved, rounds: d.rounds, cal_links: saved.cal_links || {} }, team).then(r => { const bad = r.filter(x => !x.ok);
+              if (bad.length) toast(`Cal.com link for Round ${bad.map(x => x.n).join(', ')} wasn't created. Open the job's Panel and rounds tab to retry.`, true); }); }
       catch (e) { btn.disabled = false; fail(e); }
     };
   }
@@ -314,85 +317,169 @@
 
   /* Hiring panel and interview rounds: shared editor used by the New job form and the job's tab */
   const ROUND_NAMES = ['Intro call', 'Skills interview', 'Final interview'];
-  function panelRoundsEditor(host, st, team, canEdit) {
+  // Who sends what: the booking link a candidate gets for a round with this interviewer
+  const linkSource = t => !t ? '' : t.cal_account ? `${firstName(t.full_name)}'s Cal.com` : t.booking_url ? `${firstName(t.full_name)}'s booking page` : 'the ATS booking page';
+  const firstName = n => String(n || '').trim().split(' ')[0];
+
+  // Hiring panel (searchable picker) and interview rounds (one interviewer each).
+  // opts.onChange fires after every edit so the job page can save automatically.
+  function panelRoundsEditor(host, st, team, canEdit, opts = {}) {
     const dis = canEdit ? '' : 'disabled';
     st.panel = (st.panel || []).filter(id => team.some(t => t.id === id));
-    st.rounds = JSON.parse(JSON.stringify(st.rounds || []));
-    // Each round can have several interviewers; old rounds only had interviewer_id
-    const idsOf = rd => (Array.isArray(rd.interviewer_ids) && rd.interviewer_ids.length ? rd.interviewer_ids : (rd.interviewer_id ? [rd.interviewer_id] : []));
-    st.rounds.forEach(rd => { rd.interviewer_ids = idsOf(rd); });
+    // Rounds used to allow several interviewers; keep only the first (the one whose link is sent)
+    st.rounds = JSON.parse(JSON.stringify(st.rounds || [])).map(rd => ({ name: rd.name, duration: rd.duration || 30,
+      interviewer_id: (Array.isArray(rd.interviewer_ids) && rd.interviewer_ids[0]) || rd.interviewer_id || null }));
+    let q = '', open = false, adding = false;
+    const changed = () => opts.onChange && opts.onChange();
+    const byId = id => team.find(t => t.id === id);
+    const tag = t => t.company ? `<span class="chip ext" title="Outside DRG">${esc(t.company)}</span>` : '';
     const draw = () => {
-      const inPanel = team.filter(t => st.panel.includes(t.id));
-      host.innerHTML = `<div class="field"><label>Hiring panel</label><div class="small muted">Who is involved in hiring for this role.</div>
-          <div style="display:grid;gap:6px;margin-top:4px">${team.map(t => `<label class="row panel-pick" style="gap:10px;flex-wrap:nowrap"><input type="checkbox" data-pm="${t.id}" ${st.panel.includes(t.id) ? 'checked' : ''} ${dis}>${avatar(t.full_name, 28)}
-            <span class="grow"><b>${esc(t.full_name)}</b><span class="small muted" style="display:block">${esc(t.title || '')}${t.title ? ' · ' : ''}${esc(t.email)}</span></span>
-            ${!t.meeting_link && !t.booking_url ? '<span class="chip v-review" title="Add a meeting link in Settings → Interview panel">No meeting link</span>' : ''}</label>`).join('') || '<div class="small muted">No one in the interview panel yet.</div>'}</div>
-          <a class="small" href="#/settings?tab=panel" data-close>Add or edit people in Settings → Interview panel</a></div>
+      const inPanel = st.panel.map(byId).filter(Boolean);
+      const ql = q.trim().toLowerCase();
+      const matches = team.filter(t => t.active !== false && !st.panel.includes(t.id) &&
+        (!ql || `${t.full_name} ${t.email} ${t.title || ''} ${t.company || ''}`.toLowerCase().includes(ql))).slice(0, 8);
+      host.innerHTML = `<div class="field"><label for="pq">Hiring panel</label><div class="small muted">Who is involved in hiring for this role. Search for a person to add them.</div>
+          ${canEdit ? `<div class="pick-box">
+            <input class="input" id="pq" placeholder="Search by name or email…" autocomplete="off" value="${esc(q)}" role="combobox" aria-expanded="${open}" aria-controls="pql">
+            ${open ? `<div class="pick-list" id="pql" role="listbox">${matches.map(t => `<button type="button" class="pick-opt" role="option" data-add="${t.id}">${avatar(t.full_name, 26)}<span class="grow"><b>${esc(t.full_name)}</b><span class="small muted" style="display:block">${esc(t.email)}</span></span>${tag(t)}</button>`).join('')
+              || `<div class="small muted" style="padding:10px 12px">${ql ? 'No one matches.' : 'Everyone is already on the panel.'}</div>`}
+              <button type="button" class="pick-opt pick-new" data-new>+ Add someone outside DRG${ql && !ql.includes('@') ? ` named "${esc(q.trim())}"` : ''}</button></div>` : ''}
+          </div>` : ''}
+          ${adding ? `<div class="card" style="padding:14px;display:grid;gap:10px;margin-top:6px"><b>Add someone outside DRG</b>
+            <div class="grid2"><div class="field"><label for="xn">Full name</label><input class="input" id="xn" value="${esc(ql.includes('@') ? '' : q.trim())}" placeholder="Philip Thomas"></div>
+              <div class="field"><label for="xe">Work email</label><input class="input" id="xe" type="email" value="${esc(ql.includes('@') ? q.trim() : '')}" placeholder="philip@techjays.com"></div></div>
+            <div class="grid2"><div class="field"><label for="xc">Company</label><input class="input" id="xc" placeholder="TechJays"></div>
+              <div class="field"><label for="xb">Booking link (optional)</label><input class="input" id="xb" placeholder="Calendly or Cal.com link"></div></div>
+            <div class="small muted">They don't get a login. If they run a round, candidates get their booking link, or the ATS booking page if they don't have one.</div>
+            <div class="row" style="gap:8px"><button type="button" class="btn primary sm" id="xsave">Add to panel</button><button type="button" class="btn sm" id="xcancel">Cancel</button></div></div>` : ''}
+          <div class="panel-list">${inPanel.map(t => `<div class="row panel-pick" style="gap:10px;flex-wrap:nowrap">${avatar(t.full_name, 28)}
+              <span class="grow"><b>${esc(t.full_name)}</b><span class="small muted" style="display:block">${esc(t.title || '')}${t.title ? ' · ' : ''}${esc(t.email)}</span></span>${tag(t)}
+              ${!t.meeting_link && !t.booking_url && !t.cal_account ? '<span class="chip v-review" title="Add a meeting or booking link in Settings → Interview panel">No meeting link</span>' : ''}
+              ${canEdit ? `<button type="button" class="btn sm ghost" data-rm="${t.id}" aria-label="Remove ${esc(t.full_name)} from the panel" title="Remove">✕</button>` : ''}</div>`).join('')
+            || '<div class="small muted">No one on the panel yet.</div>'}</div>
+          <a class="small" href="#/settings?tab=panel" data-close>Edit people's meeting links in Settings → Interview panel</a></div>
         <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
-        <div class="small muted" style="margin-top:-6px">Moving a candidate into a round emails them a link to book a time. Tick more than one interviewer to have them all on the same call; only times when everyone is free are offered.</div>
-        ${st.rounds.map((rd, i) => `<div class="round-row"><span class="round-n">Round ${i + 1}</span>
+        <div class="small muted" style="margin-top:-6px">Moving a candidate into a round emails them the interviewer's link to book a time. Anyone else can join the call from the shared calendar.</div>
+        ${st.rounds.map((rd, i) => { const t = byId(rd.interviewer_id);
+          return `<div class="round-row"><span class="round-n">Round ${i + 1}</span>
           <div class="field"><label for="rn${i}">Name</label><input class="input" id="rn${i}" data-rn="${i}" value="${esc(rd.name)}" placeholder="${ROUND_NAMES[i]}" ${dis}></div>
-          <div class="field"><span class="lbl" style="font-size:12.5px;font-weight:600">Interviewers</span><div class="iv-picks" role="group" aria-label="Interviewers for Round ${i + 1}">${inPanel.map(t => `<label class="iv-pick ${rd.interviewer_ids.includes(t.id) ? 'on' : ''}"><input type="checkbox" data-ri="${i}" value="${t.id}" ${rd.interviewer_ids.includes(t.id) ? 'checked' : ''} ${dis}>${esc(t.full_name)}</label>`).join('') || '<span class="small muted">Tick people in the hiring panel first</span>'}</div></div>
-          <div class="field"><label for="rd${i}">Length</label><select class="input" id="rd${i}" data-rd="${i}" ${dis}>${[15, 30, 45, 60, 90].map(m => `<option value="${m}" ${+rd.duration === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></div></div>`).join('')}
-        ${st.rounds.length && !inPanel.length ? '<div class="small" style="color:var(--review)">Tick people in the hiring panel first, then choose the interviewers for each round.</div>' : ''}`;
+          <div class="field"><label for="ri${i}">Interviewer</label><select class="input" id="ri${i}" data-ri="${i}" ${dis}><option value="">Choose…</option>${inPanel.map(p => `<option value="${p.id}" ${p.id === rd.interviewer_id ? 'selected' : ''}>${esc(p.full_name)}</option>`).join('')}</select>
+            <div class="small ${t ? 'muted' : ''}" ${t ? '' : 'style="color:var(--review)"'}>${t ? `Candidates get ${esc(linkSource(t))}` : inPanel.length ? 'Choose who runs this round' : 'Add people to the hiring panel first'}</div></div>
+          <div class="field"><label for="rd${i}">Length</label><select class="input" id="rd${i}" data-rd="${i}" ${dis}>${[15, 30, 45, 60, 90].map(m => `<option value="${m}" ${+rd.duration === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></div></div>`; }).join('')}`;
       if (!canEdit) return;
-      $$('[data-pm]', host).forEach(n => n.onchange = () => { st.panel = n.checked ? [...st.panel, n.dataset.pm] : st.panel.filter(x => x !== n.dataset.pm);
-        st.rounds.forEach(rd => { rd.interviewer_ids = rd.interviewer_ids.filter(x => st.panel.includes(x)); }); draw(); });
+      const pq = $('#pq', host);
+      pq.oninput = () => { q = pq.value; open = true; draw(); const n = $('#pq', host); n.focus(); n.setSelectionRange(q.length, q.length); };
+      pq.onfocus = () => { if (!open) { open = true; draw(); const n = $('#pq', host); n.focus(); n.setSelectionRange(q.length, q.length); } };
+      pq.onkeydown = e => { if (e.key === 'Escape') { open = false; draw(); }
+        if (e.key === 'Enter') { e.preventDefault(); const first = $('[data-add]', host); if (first) first.click(); } };
+      $$('[data-add]', host).forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => { st.panel.push(b.dataset.add); q = ''; open = false; draw(); changed(); $('#pq', host)?.focus(); }; });
+      const nb = $('[data-new]', host); if (nb) { nb.onmousedown = e => e.preventDefault(); nb.onclick = () => { adding = true; open = false; draw(); const f = $('#xn', host); (f.value ? $('#xe', host) : f).focus(); }; }
+      if (open) { const close = e => { if (!host.contains(e.target) || !e.target.closest('.pick-box')) { document.removeEventListener('mousedown', close); if (open) { open = false; draw(); } } };
+        setTimeout(() => document.addEventListener('mousedown', close), 0); }
+      $$('[data-rm]', host).forEach(b => b.onclick = () => { st.panel = st.panel.filter(x => x !== b.dataset.rm);
+        st.rounds.forEach(rd => { if (rd.interviewer_id === b.dataset.rm) rd.interviewer_id = null; }); draw(); changed(); });
+      if (adding) {
+        $('#xcancel', host).onclick = () => { adding = false; draw(); };
+        $('#xsave', host).onclick = async () => {
+          const full_name = $('#xn', host).value.trim(), email = $('#xe', host).value.trim().toLowerCase(), company = $('#xc', host).value.trim(), booking_url = $('#xb', host).value.trim();
+          if (!full_name) return toast('Add their name.', true);
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('Add a valid email address.', true);
+          if (booking_url && !/^https?:\/\//i.test(booking_url)) return toast('The booking link should start with https://', true);
+          const known = team.find(t => (t.email || '').toLowerCase() === email);
+          try {
+            const m = known || await api.saveMember({ full_name, email, company: company || null, booking_url: booking_url || null, active: true });
+            if (!known) team.push(m);
+            if (!st.panel.includes(m.id)) st.panel.push(m.id);
+            adding = false; q = ''; draw(); changed(); toast(known ? `${known.full_name} was already in the list, so they've been added to the panel` : `${m.full_name} added to the panel`);
+          } catch (e) { fail(e); }
+        };
+      }
       $('#rc', host).onchange = e => { const n = +e.target.value;
-        while (st.rounds.length < n) st.rounds.push({ name: ROUND_NAMES[st.rounds.length], duration: 30, interviewer_ids: st.panel.length === 1 ? [st.panel[0]] : [] });
-        st.rounds = st.rounds.slice(0, n); draw(); };
-      $$('[data-rn]', host).forEach(n => n.oninput = () => st.rounds[n.dataset.rn].name = n.value);
-      $$('[data-ri]', host).forEach(n => n.onchange = () => { const rd = st.rounds[n.dataset.ri];
-        rd.interviewer_ids = n.checked ? [...new Set([...rd.interviewer_ids, n.value])] : rd.interviewer_ids.filter(x => x !== n.value); draw(); });
-      $$('[data-rd]', host).forEach(n => n.onchange = () => st.rounds[n.dataset.rd].duration = +n.value);
+        while (st.rounds.length < n) st.rounds.push({ name: ROUND_NAMES[st.rounds.length], duration: 30, interviewer_id: st.panel.length === 1 ? st.panel[0] : null });
+        st.rounds = st.rounds.slice(0, n); draw(); changed(); };
+      $$('[data-rn]', host).forEach(n => n.oninput = () => { st.rounds[n.dataset.rn].name = n.value; changed(); });
+      $$('[data-ri]', host).forEach(n => n.onchange = () => { st.rounds[n.dataset.ri].interviewer_id = n.value || null; draw(); changed(); });
+      $$('[data-rd]', host).forEach(n => n.onchange = () => { st.rounds[n.dataset.rd].duration = +n.value; changed(); });
     };
     draw();
     return {
       value() {
         const rounds = st.rounds.map((rd, i) => ({ name: (rd.name || '').trim() || ROUND_NAMES[i], duration: +rd.duration || 30,
-          interviewer_id: rd.interviewer_ids[0] || null, interviewer_ids: [...rd.interviewer_ids] }));
-        const missing = rounds.findIndex(rd => !rd.interviewer_ids.length);
-        return { error: missing >= 0 ? `Choose at least one interviewer for Round ${missing + 1}.` : null, hiring_panel: [...st.panel], rounds };
+          interviewer_id: rd.interviewer_id || null, interviewer_ids: rd.interviewer_id ? [rd.interviewer_id] : [] }));
+        const missing = rounds.findIndex(rd => !rd.interviewer_id);
+        return { error: missing >= 0 ? `Choose an interviewer for Round ${missing + 1}.` : null, hiring_panel: [...st.panel], rounds };
       }
     };
   }
+
+  // Create any missing Cal.com links for a job's rounds, in the background. Returns per-round results.
+  async function ensureCalLinks(job, team, onStep) {
+    if (!CFG.CALCOM_CREATE_URL) return [];
+    const out = [];
+    for (const [i, rd] of (job.rounds || []).entries()) {
+      const n = i + 1, t = team.find(x => x.id === rd.interviewer_id), l = (job.cal_links || {})[n];
+      if (!t || !t.cal_account || (l && l.url && l.account === t.cal_account)) continue;
+      onStep && onStep(n, 'creating');
+      try { const r = await api.createCalLink(job.id, n);
+        job.cal_links = { ...(job.cal_links || {}), [n]: { url: r.booking_url, event_type_id: r.event_type_id, account: r.account } };
+        out.push({ n, ok: true }); onStep && onStep(n, 'ok'); }
+      catch (e) { out.push({ n, ok: false, message: e.message }); onStep && onStep(n, 'error', e.message); }
+    }
+    return out;
+  }
+
   async function panelBuilder(body, job, canEdit) {
     const team = (await api.team()).filter(t => t.active !== false);
-    body.innerHTML = `<div class="card" style="max-width:860px"><div class="card-h"><div><h3>Hiring panel and interview rounds</h3><div class="small muted">Choose who hires for this role, how many interview rounds there are, and who runs each one.</div></div></div>
-      <div class="card-b" style="display:grid;gap:14px"><div id="pr" style="display:grid;gap:14px"></div>
-      ${canEdit ? '<button class="btn primary" id="savepanel" style="justify-self:start">Save panel and rounds</button>' : ''}</div></div>`;
-    const ed = panelRoundsEditor($('#pr', body), { panel: job.hiring_panel, rounds: job.rounds }, team, canEdit);
+    body.innerHTML = `<div class="card" style="max-width:860px"><div class="card-h"><div><h3>Hiring panel and interview rounds</h3><div class="small muted">Choose who hires for this role, how many interview rounds there are, and who runs each one. Changes save automatically.</div></div>
+        ${canEdit ? '<span class="small muted save-state" id="svst" aria-live="polite">All changes saved</span>' : ''}</div>
+      <div class="card-b" style="display:grid;gap:14px"><div id="pr" style="display:grid;gap:14px"></div></div></div>`;
+    const calState = {};
     let redrawCal = () => {};
+    let timer = null, saving = false, again = false, linking = false, relink = false;
+    const svst = $('#svst', body);
+    const setState = (txt, warn) => { if (svst) { svst.textContent = txt; svst.style.color = warn ? 'var(--review)' : ''; } };
+    const links = async () => {
+      if (linking) { relink = true; return; }
+      linking = true;
+      try { do { relink = false; await ensureCalLinks(job, team, (n, s, msg) => { calState[n] = { s, msg }; redrawCal(); }); } while (relink); }
+      finally { linking = false; }
+    };
+    const save = async () => {
+      if (saving) { again = true; return; }
+      saving = true; setState('Saving…');
+      try {
+        do { again = false; const v = ed.value();
+          await api.updateJob(job.id, { hiring_panel: v.hiring_panel, rounds: v.rounds });
+          job.hiring_panel = v.hiring_panel; job.rounds = v.rounds;
+          setState(v.error ? `Saved · ${v.error}` : 'All changes saved', !!v.error); } while (again);
+        redrawCal(); links();
+      } catch (e) { setState('Not saved. Check your connection.', true); fail(e); }
+      finally { saving = false; }
+    };
+    const ed = panelRoundsEditor($('#pr', body), { panel: job.hiring_panel, rounds: job.rounds }, team, canEdit,
+      { onChange: () => { setState('Saving…'); clearTimeout(timer); timer = setTimeout(save, 700); } });
     if (CFG.CALCOM_CREATE_URL) {
       const cal = document.createElement('div'); cal.className = 'card'; cal.style.maxWidth = '860px';
-      const byId = Object.fromEntries(team.map(t => [t.id, t]));
       const drawCal = () => {
-        const links = job.cal_links || {};
+        const all = job.cal_links || {};
         const rows = (job.rounds || []).map((rd, i) => {
-          const n = i + 1, ids = (rd.interviewer_ids && rd.interviewer_ids.length ? rd.interviewer_ids : [rd.interviewer_id]).filter(Boolean);
-          const lead = byId[ids[0]], l = links[n], acct = lead && lead.cal_account;
-          const mine = l && l.url && acct && l.account === acct;
-          const who = ids.map(x => byId[x] ? byId[x].full_name.split(' ')[0] : '').filter(Boolean).join(' & ') || 'No interviewer yet';
+          const n = i + 1, lead = team.find(t => t.id === rd.interviewer_id), l = all[n], acct = lead && lead.cal_account, cs = calState[n];
           let right;
-          if (mine) right = `<a class="btn sm" href="${esc(l.url)}" target="_blank" rel="noopener">Open ↗</a><span class="small muted mono" style="word-break:break-all">${esc(l.url)}</span>`;
-          else if (!lead) right = '<span class="small muted">Choose an interviewer and save first.</span>';
-          else if (!acct) right = `<span class="small muted">${esc(lead.full_name.split(' ')[0])} hasn't connected Cal.com, so candidates get ${lead.booking_url ? 'their own booking link' : 'the ATS booking page'}.</span>`;
-          else right = canEdit ? `<button class="btn primary sm" data-mkcal="${n}">Create link in ${esc(lead.full_name.split(' ')[0])}'s Cal.com</button>${l && l.url ? '<span class="small" style="color:var(--review)">The interviewer changed, so the old link is no longer used.</span>' : ''}` : '<span class="small muted">No link yet</span>';
-          return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;padding:10px 0;border-top:1px solid var(--line)"><span style="min-width:190px"><b>Round ${n}</b> · ${esc(rd.name || '')}<br><span class="small muted">${esc(who)}</span></span><span class="row" style="gap:10px;flex-wrap:wrap;flex:1">${right}</span></div>`;
+          if (!lead) right = '<span class="small muted">Choose an interviewer above.</span>';
+          else if (!acct) right = `<span class="small muted">${esc(firstName(lead.full_name))} isn't connected to Cal.com, so candidates get ${lead.booking_url ? 'their own booking link' : 'the ATS booking page'}.</span>`;
+          else if (l && l.url && l.account === acct) right = `<a class="btn sm" href="${esc(l.url)}" target="_blank" rel="noopener">Open ↗</a><span class="small muted mono" style="word-break:break-all">${esc(l.url)}</span>`;
+          else if (cs && cs.s === 'error') right = `<span class="small" style="color:var(--disq)">${esc(cs.msg || 'Could not create the link.')}</span>${canEdit ? `<button class="btn sm" data-retry="${n}">Try again</button>` : ''}`;
+          else if (!canEdit) right = '<span class="small muted">No link yet</span>';
+          else right = `<span class="small muted">Creating the link in ${esc(firstName(lead.full_name))}'s Cal.com…</span>`;
+          return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;padding:10px 0;border-top:1px solid var(--line)"><span style="min-width:190px"><b>Round ${n}</b> · ${esc(rd.name || '')}<br><span class="small muted">${esc(lead ? lead.full_name : 'No interviewer yet')}</span></span><span class="row" style="gap:10px;flex-wrap:wrap;flex:1">${right}</span></div>`;
         }).join('');
-        cal.innerHTML = `<div class="card-h"><div><h3>Cal.com booking links</h3><div class="small muted">Each round gets its own link in the lead interviewer's Cal.com. Candidates moved into that round get it with their name and email filled in, and each booking shows in the calendar as "${esc(job.title)} · round name · candidate name". Bookings come back into the ATS and the pipeline card turns blue.</div></div></div>
-          <div class="card-b">${rows || '<p class="small muted" style="margin:0">Set up the interview rounds above and save, then create a link for each round.</p>'}</div>`;
-        $$('[data-mkcal]', cal).forEach(b => b.onclick = async () => { const n = +b.dataset.mkcal; b.disabled = true; b.textContent = 'Creating…';
-          try { const r = await api.createCalLink(job.id, n); job.cal_links = { ...(job.cal_links || {}), [n]: { url: r.booking_url, event_type_id: r.event_type_id, account: r.account } }; toast(r.message || 'Cal.com link created'); drawCal(); }
-          catch (e) { b.disabled = false; b.textContent = 'Try again'; fail(e); } });
+        cal.innerHTML = `<div class="card-h"><div><h3>Cal.com booking links</h3><div class="small muted">Created automatically in the interviewer's Cal.com when you choose them for a round. Candidates moved into that round get the link with their name and email filled in, and bookings come back into the ATS.</div></div></div>
+          <div class="card-b">${rows || '<p class="small muted" style="margin:0">Set up the interview rounds above. Links are created as soon as each round has an interviewer.</p>'}</div>`;
+        $$('[data-retry]', cal).forEach(b => b.onclick = () => { delete calState[+b.dataset.retry]; drawCal(); links(); });
       };
       redrawCal = drawCal; drawCal(); body.append(cal);
+      if (canEdit) links();   // fill in any links still missing on rounds saved earlier
     }
-    if (!canEdit) return;
-    $('#savepanel', body).onclick = async () => {
-      const v = ed.value(); if (v.error) return toast(v.error, true);
-      try { await api.updateJob(job.id, { hiring_panel: v.hiring_panel, rounds: v.rounds }); job.hiring_panel = v.hiring_panel; job.rounds = v.rounds; toast('Panel and rounds saved'); redrawCal(); } catch (e) { fail(e); }
-    };
   }
 
   /* Custom application form for one job */
@@ -642,29 +729,22 @@
         <div class="field"><label for="sd">Length</label><select class="input" id="sd">${[15, 30, 45, 60, 90].map(x => `<option value="${x}">${x} min</option>`).join('')}</select></div></div>
       <div class="field"><label for="st">Date and time (your computer's time zone)</label><input class="input" type="datetime-local" id="st" value="${local}"></div>
       <div class="field"><label for="si">Interviewer</label><select class="input" id="si">${active.map(t => `<option value="${t.id}">${esc(t.full_name)}${t.title ? ' · ' + esc(t.title) : ''}</option>`).join('')}</select></div>
-      <div class="field"><span class="lbl" style="font-size:12.5px;font-weight:600">Also attending (optional)</span><div class="iv-picks" id="sco">${active.map(t => `<label class="iv-pick"><input type="checkbox" data-co="${t.id}">${esc(t.full_name)}</label>`).join('')}</div></div>
       <div class="field"><label for="sl">Meeting link</label><input class="input" id="sl" placeholder="https://meet.google.com/… or Zoom link"><div class="small" id="slh" style="color:var(--review)"></div></div>
-      <p class="small muted" style="margin:0">A confirmation email with a calendar invite goes to the candidate and everyone attending.</p>`,
+      <p class="small muted" style="margin:0">A confirmation email with a calendar invite goes to the candidate and the interviewer. Anyone else can join from the shared calendar.</p>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Schedule and send invite</button>`);
     const fill = () => { const rd = rounds[rno - 1] || {};
       if (rd.interviewer_id && active.some(t => t.id === rd.interviewer_id)) $('#si', m.el).value = rd.interviewer_id;
-      const rids = Array.isArray(rd.interviewer_ids) && rd.interviewer_ids.length ? rd.interviewer_ids : (rd.interviewer_id ? [rd.interviewer_id] : []);
-      if (rids[0] && active.some(t => t.id === rids[0])) $('#si', m.el).value = rids[0];
-      $$('[data-co]', m.el).forEach(c => { c.checked = rids.slice(1).includes(c.dataset.co); c.closest('.iv-pick').classList.toggle('on', c.checked); });
-      syncCo();
       $('#sd', m.el).value = String(rd.duration || 30);
       const t = active.find(x => x.id === $('#si', m.el).value); $('#sl', m.el).value = t?.meeting_link || ''; slHint(t); };
     fill();
-    function syncCo() { const lead = $('#si', m.el).value; $$('[data-co]', m.el).forEach(c => { const me = c.dataset.co === lead; c.disabled = me; if (me) c.checked = false; c.closest('.iv-pick').hidden = me; c.closest('.iv-pick').classList.toggle('on', c.checked); }); }
-    $$('[data-co]', m.el).forEach(c => c.onchange = () => c.closest('.iv-pick').classList.toggle('on', c.checked));
     function slHint(t) { $('#slh', m.el).textContent = !t || t.meeting_link ? '' : `${t.full_name} has no meeting link saved${t.booking_url ? ' (only a booking page, which candidates use to pick a time, not to join the call)' : ''}. Paste a Google Meet or Zoom link here, or add one in Settings → Interview panel.`; }
     $('#ss', m.el).onchange = e => { rno = +e.target.value; fill(); };
-    $('#si', m.el).onchange = () => { const t = active.find(x => x.id === $('#si', m.el).value); $('#sl', m.el).value = t?.meeting_link || ''; slHint(t); syncCo(); };
+    $('#si', m.el).onchange = () => { const t = active.find(x => x.id === $('#si', m.el).value); $('#sl', m.el).value = t?.meeting_link || ''; slHint(t); };
     $('#go', m.el).onclick = async () => {
       const when = new Date($('#st', m.el).value);
       if (isNaN(when)) return toast('Choose a date and time.', true);
       const go = $('#go', m.el); go.disabled = true;
-      try { const row = await api.schedule({ application_id: id, stage_id: ROUND_STAGE[rno], round_no: rno, team_member_id: $('#si', m.el).value, co_interviewer_ids: $$('[data-co]:checked', m.el).map(c => c.dataset.co).filter(x => x !== $('#si', m.el).value),
+      try { const row = await api.schedule({ application_id: id, stage_id: ROUND_STAGE[rno], round_no: rno, team_member_id: $('#si', m.el).value, co_interviewer_ids: [],
           scheduled_at: when.toISOString(), duration_min: +$('#sd', m.el).value, meeting_link: $('#sl', m.el).value.trim() || null,
           candidate_tz: Intl.DateTimeFormat().resolvedOptions().timeZone }, a.stage_id);
         m.close(); toast(row.warning ? `Interview saved. ${row.warning}` : 'Interview scheduled and invite sent', !!row.warning); after?.(); }
