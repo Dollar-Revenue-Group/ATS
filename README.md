@@ -13,3 +13,4 @@ Static front end for the DRG applicant tracking system. Data lives in Supabase; 
 
 Database migrations and n8n workflow changes are not part of this repo; they apply to the live system immediately, so make them backward compatible before testing on staging.
 Staging site: https://staging--drg-ats.netlify.app
+Careers staging site: https://staging--drg-careers.netlify.app (folder: careers)
