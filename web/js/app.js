@@ -652,6 +652,42 @@
       <a class="btn sm" href="tel:+${esc(full)}">Call</a><a class="btn sm" href="https://wa.me/${esc(full)}" target="_blank" rel="noopener">WhatsApp</a>
       <button type="button" class="btn sm ghost" data-copyphone="+${esc(full)}">Copy</button>${p.code ? '' : '<span class="small" style="color:var(--review)">No country code</span>'}</div>`;
   }
+
+  /* ───────── in-app document viewer (resumes and attachments) ───────── */
+  // PDFs and images open inside the ATS; Word files show the text the AI read, with a download button
+  async function viewFile({ path, name, resumeId }) {
+    const ext = String(name || path || '').split('.').pop().toLowerCase();
+    const kind = ext === 'pdf' ? 'pdf' : ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext) ? 'img' : 'doc';
+    const s = document.createElement('div'); s.className = 'scrim viewer-scrim';
+    s.innerHTML = `<div class="viewer" role="dialog" aria-modal="true" aria-label="${esc(name || 'Document')}">
+      <div class="viewer-h">${icon('file', 18)}<b class="grow" title="${esc(name || '')}">${esc(name || 'Document')}</b>
+        <a class="btn sm" id="vdl" hidden>Download</a><a class="btn sm" id="vnew" target="_blank" rel="noopener" hidden>Open in new tab ↗</a>
+        <button class="x" data-vclose aria-label="Close">${icon('x', 20)}</button></div>
+      <div class="viewer-b"><div class="empty"><span class="spin"></span></div></div></div>`;
+    document.body.append(s);
+    let blobUrl = null;
+    const close = () => { s.remove(); if (blobUrl) URL.revokeObjectURL(blobUrl); document.removeEventListener('keydown', onKey, true); };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    s.addEventListener('click', e => { if (e.target === s || e.target.closest('[data-vclose]')) close(); });
+    const body = $('.viewer-b', s);
+    try {
+      const url = await api.fileUrl(path);
+      if (!url) { body.innerHTML = '<div class="empty">Files open in the live app (demo has sample data only).</div>'; if (kind !== 'doc' || !resumeId) return; }
+      if (url) { const dl = $('#vdl', s), nw = $('#vnew', s); dl.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(name || 'file'); dl.hidden = false; nw.href = url; nw.hidden = false; }
+      if (kind === 'pdf') {
+        const r = await fetch(url); if (!r.ok) throw new Error('The file could not be loaded.');
+        blobUrl = URL.createObjectURL(new Blob([await r.blob()], { type: 'application/pdf' }));
+        body.innerHTML = `<iframe class="viewer-frame" title="${esc(name || 'Resume')}" src="${blobUrl}#view=FitH"></iframe>`;
+      } else if (kind === 'img') {
+        body.innerHTML = `<div class="viewer-img"><img src="${esc(url)}" alt="${esc(name || '')}"></div>`;
+      } else {
+        const text = resumeId ? await api.resumeText(resumeId) : '';
+        body.innerHTML = `<div class="viewer-text"><div class="small muted" style="margin-bottom:10px">Word documents can't be shown as-is in the browser. This is the text the AI read from it; use Download for the original file.</div>
+          ${text ? `<pre>${esc(text)}</pre>` : '<div class="empty">No text could be read from this file. Download it to view.</div>'}</div>`;
+      }
+    } catch (e) { body.innerHTML = `<div class="empty">${esc(e.message || 'The file could not be shown.')} Use Download or Open in new tab instead.</div>`; }
+  }
   /* ───────── booking links (copy / resend) ───────── */
   // The link candidates use to book a round: the round's Cal.com link if it belongs to the current interviewer, else their own booking page
   function roundLink(job, n, team) {
@@ -776,8 +812,8 @@
       $$('[data-resend]', s).forEach(b => b.onclick = async () => { b.disabled = true;
         try { const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled'); await api.resendEmail(id, b.dataset.resend, iv?.id); toast('Email sent'); render(); }
         catch (e) { b.disabled = false; fail(e); } });
-      $$('[data-att]', s).forEach(b => b.onclick = async () => { try { const f = a.attachments[+b.dataset.att]; const u = await api.fileUrl(f.path); u ? window.open(u, '_blank', 'noopener') : toast('Files open in the live app.'); } catch (e) { fail(e); } });
-      $('#resume', s).onclick = async () => { try { const u = await api.resumeUrl(a.resumes?.storage_path); u ? window.open(u, '_blank', 'noopener') : toast('Resume files open in the live app (demo has sample data only).'); } catch (e) { fail(e); } };
+      $$('[data-att]', s).forEach(b => b.onclick = () => { const f = a.attachments[+b.dataset.att]; viewFile({ path: f.path, name: f.name || f.label || String(f.path).split('/').pop() }); });
+      $('#resume', s).onclick = () => { if (!a.resumes?.storage_path) return toast('No resume file for this candidate.', true); viewFile({ path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }); };
       $('#rescr', s) && ($('#rescr', s).onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } });
       $('#rej', s) && ($('#rej', s).onclick = () => rejectFlow(id, () => { render(); state.redraw?.(); }));
       $$('[data-score]', s).forEach(b => b.onclick = () => scorecardFlow(b.dataset.score, render));

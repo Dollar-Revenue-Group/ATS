@@ -125,6 +125,7 @@
         return d.signedUrl;
       },
       async fileUrl(path) { return this.resumeUrl(path); },
+      async resumeText(resumeId) { const r = ok(await sb.from('resumes').select('raw_text').eq('id', resumeId).maybeSingle()); return r?.raw_text || ''; },
       async moveStage(appId, stageId, reason) {
         const status = stageId === 7 ? 'rejected' : stageId === 6 ? 'hired' : 'active';
         ok(await sb.from('applications').update({ stage_id: stageId, status, rejection_reason: reason || null }).eq('id', appId));
@@ -432,6 +433,7 @@
       async createCalLink(jobId, round) { await new Promise(r => setTimeout(r, 400)); return { ok: true, booking_url: `https://cal.com/demo/drg-${jobId}-r${round}-interview`, event_type_id: 1, account: 'demo', message: 'Demo link' }; },
       async saveMember(m) { if (m.id) { Object.assign(team.find(t => t.id === m.id), m); return m; } const t = { id: id('tm'), active: true, ...m }; team.push(t); return t; },
       async fileUrl() { return null; },
+      async resumeText() { return 'Sample resume text (demo).\n\nExperience\n- 3 years as an SDR at Acme SaaS\n- HubSpot, Apollo, Clay'; },
       async setRole(uid, role) { people.find(p => p.id === uid).role = role; },
       async templates() { return templates; },
       async senders() { return senders; },
