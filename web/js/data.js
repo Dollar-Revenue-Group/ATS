@@ -63,6 +63,16 @@
           return { ...j, total: mine.length, byStage };
         });
       },
+      async connectCal(memberId, apiKey) {
+        const res = await callN8n(cfg.CALCOM_CONNECT_URL, { member_id: memberId, action: 'connect', api_key: apiKey });
+        if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not connect Cal.com.');
+        return res;
+      },
+      async disconnectCal(memberId) {
+        const res = await callN8n(cfg.CALCOM_CONNECT_URL, { member_id: memberId, action: 'disconnect' });
+        if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not disconnect Cal.com.');
+        return res;
+      },
       async createCalLink(jobId, round) {
         const res = await callN8n(cfg.CALCOM_CREATE_URL, { job_id: jobId, round: round || 1 });
         if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not create the Cal.com link.');
@@ -417,6 +427,8 @@
       async scorecard(ivid, d) { Object.assign(interviews.find(i => i.id === ivid), d, { status: 'completed' }); emit(); },
       async profiles() { return people; },
       async team() { return team; },
+      async connectCal(mid, key) { const t = team.find(x => x.id === mid); Object.assign(t, { cal_key_id: 'demo', cal_username: 'demo-' + t.full_name.split(' ')[0].toLowerCase(), cal_account: t.cal_account || 'demo', cal_connected_at: iso(Date.now()) }); return { ok: true, message: 'Connected (demo)', webhook: true }; },
+      async disconnectCal(mid) { Object.assign(team.find(x => x.id === mid), { cal_key_id: null, cal_account: null, cal_connected_at: null }); return { ok: true, message: 'Disconnected (demo)' }; },
       async createCalLink(jobId, round) { await new Promise(r => setTimeout(r, 400)); return { ok: true, booking_url: `https://cal.com/demo/drg-${jobId}-r${round}-interview`, event_type_id: 1, account: 'demo', message: 'Demo link' }; },
       async saveMember(m) { if (m.id) { Object.assign(team.find(t => t.id === m.id), m); return m; } const t = { id: id('tm'), active: true, ...m }; team.push(t); return t; },
       async fileUrl() { return null; },

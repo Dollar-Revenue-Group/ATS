@@ -1026,15 +1026,49 @@
     const team = await api.team();
     sb.innerHTML = `<div class="card"><div class="card-h"><div><h3>Interview panel</h3><div class="small muted">People who interview candidates. They do not need a login. Candidates book a time from their weekly hours, and invites use their meeting link.</div></div>
         <button class="btn primary sm" id="addm">${icon('plus', 14)}Add person</button></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Time zone</th><th>Weekly hours</th><th>Meeting link</th><th>Status</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Time zone</th><th>Weekly hours</th><th>Meeting link</th><th>Cal.com</th><th>Status</th><th></th></tr></thead><tbody>
       ${team.map(t => { const av = t.availability || {}; const days = Object.keys(av.days || {}).filter(k => (av.days[k] || []).length).sort();
         return `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(t.full_name, 30)}<div><b>${esc(t.full_name)}</b><div class="small muted">${esc(t.title || '')}${t.title ? ' · ' : ''}${esc(t.email)}</div></div></div></td>
         <td class="small">${esc(t.timezone)}</td><td class="small">${days.map(k => DAYS.find(d => d[0] === +k)?.[1]).join(', ') || '—'} ${days.length ? esc((av.days[days[0]][0] || []).join('–')) : ''}</td>
         <td class="small">${t.meeting_link ? `<a href="${esc(t.meeting_link)}" target="_blank" rel="noopener">Link ↗</a>` : '<span style="color:var(--review)">Missing</span>'}${t.booking_url ? '<div class="muted">+ own booking page</div>' : ''}</td>
-        <td>${t.active === false ? '<span class="chip">Inactive</span>' : '<span class="chip v-pass">Active</span>'}</td><td><button class="btn sm" data-em="${t.id}">Edit</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">No one yet. Add the people who run interviews.</td></tr>'}
+        <td class="small">${t.cal_key_id ? `<span class="chip v-pass">Connected</span><div class="muted">${esc(t.cal_username || '')}</div>` : t.cal_account ? '<span class="chip v-pass">Connected</span><div class="muted">set up in n8n</div>' : '<span class="muted">Not connected</span>'}</td>
+        <td>${t.active === false ? '<span class="chip">Inactive</span>' : '<span class="chip v-pass">Active</span>'}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-em="${t.id}">Edit</button>${CFG.CALCOM_CONNECT_URL ? `<button class="btn sm" data-cal="${t.id}">${t.cal_key_id || t.cal_account ? 'Cal.com' : 'Connect Cal.com'}</button>` : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">No one yet. Add the people who run interviews.</td></tr>'}
       </tbody></table></div></div>`;
     $('#addm', sb).onclick = () => memberForm(null, () => panelSettings(sb));
     $$('[data-em]', sb).forEach(b => b.onclick = () => memberForm(team.find(t => t.id === b.dataset.em), () => panelSettings(sb)));
+    $$('[data-cal]', sb).forEach(b => b.onclick = () => calConnectForm(team.find(t => t.id === b.dataset.cal), () => panelSettings(sb)));
+  }
+  // Connect an interviewer's Cal.com: their API key is checked, stored encrypted, and the booking webhook is added for them
+  function calConnectForm(t, after) {
+    const first = String(t.full_name || '').split(' ')[0];
+    const stored = !!t.cal_key_id, legacy = !stored && !!t.cal_account;
+    const m = modal(`Cal.com · ${t.full_name}`, `
+      ${stored ? `<div class="card" style="padding:12px 14px"><span class="chip v-pass">Connected</span> as <b>${esc(t.cal_username || '')}</b>${t.cal_connected_at ? `<span class="small muted"> · since ${fmtDate(t.cal_connected_at)}</span>` : ''}
+          <div class="small muted" style="margin-top:6px">Booking links for rounds ${esc(first)} runs are created in this Cal.com account. Paste a new key below to replace it.</div></div>`
+        : legacy ? `<div class="card" style="padding:12px 14px"><span class="chip v-pass">Connected</span> <span class="small muted">through a credential in n8n. Paste ${esc(first)}'s key here to manage it from the ATS instead.</span></div>` : ''}
+      <ol class="small" style="margin:0 0 0 18px;display:grid;gap:6px">
+        <li>${esc(first)} signs in to Cal.com and opens <a href="https://app.cal.com/settings/developer/api-keys" target="_blank" rel="noopener">Settings → Developer → API keys ↗</a>.</li>
+        <li>Click <b>Add</b>, name it "DRG ATS", choose <b>Never expires</b>, and copy the key (it starts with <span class="mono">cal_live_</span>).</li>
+        <li>Paste it here. The ATS checks it, stores it encrypted, and adds the booking webhook to ${esc(first)}'s Cal.com automatically.</li></ol>
+      <div class="field"><label for="ck">Cal.com API key</label><input class="input mono" id="ck" type="password" autocomplete="off" spellcheck="false" placeholder="cal_live_…"></div>
+      <p class="small muted" style="margin:0">The key is only used to create interview booking links and to send bookings back to the ATS. It is never shown again after saving.</p>`,
+      `${stored ? '<button class="btn ghost" id="cdis" style="margin-right:auto;color:var(--disq)">Disconnect</button>' : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="cgo">${stored || legacy ? 'Save new key' : 'Connect Cal.com'}</button>`);
+    const go = $('#cgo', m.el);
+    go.onclick = async () => {
+      const key = $('#ck', m.el).value.trim();
+      if (!/^cal_(live|test)_[A-Za-z0-9]+$/.test(key)) return toast("Paste the Cal.com API key. It starts with cal_live_.", true);
+      go.disabled = true; go.textContent = 'Checking…';
+      try { const r = await api.connectCal(t.id, key); m.close(); toast(r.message || 'Cal.com connected', r.webhook === false); after?.(); }
+      catch (e) { go.disabled = false; go.textContent = stored || legacy ? 'Save new key' : 'Connect Cal.com'; fail(e); }
+    };
+    const dis = $('#cdis', m.el);
+    if (dis) dis.onclick = async () => {
+      if (dis.dataset.sure !== '1') { dis.dataset.sure = '1'; dis.textContent = 'Click again to disconnect'; return; }
+      dis.disabled = true;
+      try { const r = await api.disconnectCal(t.id); m.close(); toast(r.message || 'Disconnected'); after?.(); }
+      catch (e) { dis.disabled = false; fail(e); }
+    };
+    setTimeout(() => $('#ck', m.el)?.focus(), 50);
   }
   function memberForm(t, after) {
     const av = t?.availability || { slot: 30, days: { 1: [['10:00', '18:00']], 2: [['10:00', '18:00']], 3: [['10:00', '18:00']], 4: [['10:00', '18:00']], 5: [['10:00', '18:00']] } };
