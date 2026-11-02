@@ -1,0 +1,929 @@
+/* DRG ATS · recruiter portal */
+(function () {
+  const api = ATS.api;
+  const STAGES = ATS.STAGES;
+  const { ROUND_STAGE, STAGE_ROUND } = ATS;
+  const CFG = window.ATS_CONFIG || {};
+  const posOf = id => STAGES.find(s => s.id === id)?.position ?? 0;
+  const ivWho = i => i.member?.full_name || i.interviewer?.full_name || '';
+  const TZS = ['Asia/Kolkata', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Singapore', 'Australia/Sydney', 'UTC'];
+  const app = document.getElementById('app');
+  const LOGO = '<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="23 52 104 53"><defs><linearGradient id="drgw" x1="0" y1="56" x2="0" y2="101" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#C4EC12"/><stop offset="0.5" stop-color="#8FE324"/><stop offset="1" stop-color="#2FDB46"/></linearGradient></defs><path d="M83.92 86.42 L84.92 89.42 L86.92 92.42 L90.83 96.58 L95.92 99.83 L102.58 101.83 L108.75 101.75 L115.00 99.75 L120.67 96.00 L124.08 92.08 L123.50 91.00 L117.33 89.17 L112.33 92.50 L108.92 93.67 L103.67 93.92 L99.33 92.92 L97.00 91.67 L93.50 88.42 L91.17 84.50 L89.92 80.50 L89.33 80.58 Z M105.17 82.25 L106.50 83.00 L116.50 82.83 L122.92 76.58 L123.58 75.33 L122.50 74.92 L105.75 75.08 L105.08 76.00 Z M89.92 62.50 L92.33 70.42 L97.00 66.25 L101.58 64.25 L108.83 64.17 L111.75 65.08 L116.17 67.83 L117.67 66.92 L121.25 63.08 L120.75 61.83 L116.92 59.00 L112.25 57.00 L107.00 55.92 L102.67 56.00 L98.00 57.17 L93.75 59.08 Z M53.75 56.17 L53.83 56.83 L57.75 59.25 L62.58 63.83 L76.25 64.00 L79.00 65.08 L80.67 66.67 L81.83 68.67 L82.33 71.75 L81.67 74.33 L80.42 76.33 L76.67 78.67 L69.33 78.83 L68.42 79.83 L80.92 101.33 L82.33 102.00 L89.42 101.75 L89.25 100.17 L81.08 86.17 L81.50 85.08 L84.58 83.08 L86.83 80.67 L89.00 77.17 L89.83 74.58 L89.83 68.00 L89.00 65.50 L86.67 61.67 L82.67 58.17 L77.00 56.00 Z M28.33 56.00 L28.17 56.92 L35.25 63.83 L45.83 64.17 L48.92 65.08 L52.33 67.33 L54.58 69.50 L56.75 73.25 L57.75 76.25 L57.92 79.92 L57.50 82.67 L55.42 87.17 L53.75 89.33 L50.67 91.92 L45.42 93.83 L36.00 93.92 L35.17 93.00 L35.25 77.08 L34.92 76.17 L34.17 76.17 L27.42 84.42 L27.50 101.42 L28.67 102.00 L45.08 101.92 L49.75 100.75 L54.42 98.67 L57.92 96.08 L60.92 92.83 L63.67 88.25 L64.83 85.17 L65.50 80.08 L65.08 74.00 L63.92 70.08 L61.83 66.50 L57.00 61.17 L54.08 59.08 L49.25 57.00 L44.00 55.92 Z" fill="url(#drgw)" fill-rule="evenodd"/></svg>';
+  const state = { me: null, jobs: [], unsub: null, route: '' };
+
+  /* ───────── helpers ───────── */
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $ = (sel, el = document) => el.querySelector(sel);
+  const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+  const stageName = id => STAGES.find(s => s.id === id)?.name || '—';
+  const initials = n => (n || '?').replace(/\.(pdf|docx)$/i, '').split(/[\s_]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  const AV = ['#178A35', '#2563A8', '#8A4FB8', '#B4720E', '#C2410C', '#3E6B7A'];
+  const avColor = n => AV[[...(n || '')].reduce((a, c) => a + c.charCodeAt(0), 0) % AV.length];
+  const avatar = (n, size = 34) => `<span class="av" style="background:${avColor(n)};width:${size}px;height:${size}px;font-size:${Math.round(size * .37)}px">${esc(initials(n))}</span>`;
+  const fmtDate = d => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const fmtTime = d => new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const ago = d => { const m = (Date.now() - new Date(d)) / 6e4; return m < 60 ? `${Math.max(1, Math.round(m))}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+  const VERDICT = { pass: 'Pass', review: 'Review', disqualified: 'Disqualified', low_fit: 'Low fit' };
+  const VCOLOR = { pass: 'var(--pass)', review: 'var(--review)', disqualified: 'var(--disq)', low_fit: 'var(--low)' };
+  const chip = c => {
+    if (c.status === 'screening_queued' || c.status === 'screening') return `<span class="chip v-pending">Screening…</span>`;
+    if (c.status === 'screening_failed') return `<span class="chip v-failed">Needs manual review</span>`;
+    return c.verdict ? `<span class="chip v-${c.verdict}">${VERDICT[c.verdict]}</span>` : '';
+  };
+  const ring = (score, verdict, size = 44) => {
+    const r = size / 2 - 4, C = 2 * Math.PI * r, p = score == null ? 0 : score / 100;
+    return `<span class="ring" style="width:${size}px;height:${size}px" title="AI score">
+      <svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="4"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${VCOLOR[verdict] || 'var(--info)'}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C * p} ${C}"/></svg>
+      <span style="font-size:${Math.round(size * .3)}px">${score ?? '…'}</span></span>`;
+  };
+  const I = {
+    dash: '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>',
+    jobs: '<path d="M4 7h16v12H4z"/><path d="M9 7V5h6v2"/>',
+    board: '<path d="M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z"/>',
+    people: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5 6-5s5.4 1.6 6 5"/><path d="M16 4.5a3 3 0 0 1 0 6M18 15c1.7.6 2.7 2.2 3 5"/>',
+    upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 7l2.6 1.5M17.2 15.5l2.6 1.5M4.2 17l2.6-1.5M17.2 8.5l2.6-1.5"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+    trash: '<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/>', file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+    spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>', refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>', check: '<path d="M5 12l5 5 9-10"/>'
+  };
+  const icon = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+
+  function toast(msg, err) {
+    let box = $('.toasts'); if (!box) { box = document.createElement('div'); box.className = 'toasts'; document.body.append(box); }
+    const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; box.append(t);
+    setTimeout(() => t.remove(), err ? 6000 : 3200);
+  }
+  const fail = e => { console.error(e); toast(e.message || String(e), true); };
+
+  function modal(title, body, actions) {
+    const s = document.createElement('div'); s.className = 'scrim center';
+    s.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-h row" style="justify-content:space-between"><h2>${esc(title)}</h2><button class="x" data-close aria-label="Close">${icon('x')}</button></div>
+      <div class="modal-b">${body}</div><div class="modal-f">${actions}</div></div>`;
+    const close = () => s.remove();
+    s.addEventListener('click', e => { if (e.target === s || e.target.closest('[data-close]')) close(); });
+    document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', k); } });
+    document.body.append(s); $('input,select,textarea', s)?.focus(); return { el: s, close };
+  }
+
+  /* ───────── shell ───────── */
+  const NAV = [
+    ['dashboard', 'Dashboard', 'dash'], ['jobs', 'Jobs', 'jobs'], ['pipeline', 'Pipeline', 'board'], ['candidates', 'Candidates', 'people'],
+    ['upload', 'Upload resumes', 'upload'], ['interviews', 'Interviews', 'cal'], ['settings', 'Settings', 'gear']
+  ];
+  function shell() {
+    const me = state.me; const isInt = me.role === 'interviewer';
+    const nav = NAV.filter(([k]) => isInt ? k === 'interviews' : (k !== 'settings' || me.role === 'admin') && (k !== 'upload' || me.role !== 'hiring_manager'));
+    app.innerHTML = `<div class="shell">
+      <aside class="side" id="side">
+        <div class="brand"><div class="brand-mark">${LOGO}</div><div><div class="brand-name">DRG ATS</div><div class="brand-sub">Applicant tracking</div></div></div>
+        <nav class="nav" aria-label="Main">${nav.map(([k, l, ic]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(ic)}<span>${l}</span>${k === 'pipeline' ? '<span class="count" id="nav-review" hidden></span>' : ''}</a>`).join('')}</nav>
+        <div class="side-foot">${avatar(me.full_name, 32)}<div class="who"><b>${esc(me.full_name)}</b><span>${esc(me.role.replace('_', ' '))}</span></div>
+          <button id="logout" title="Sign out" aria-label="Sign out">${icon('out')}</button></div>
+      </aside>
+      <div class="main">
+        <header class="topbar">
+          <button class="icon-btn menu-btn" id="menu" aria-label="Open menu">${icon('menu')}</button>
+          <form class="search" id="search" role="search">${icon('search')}<input id="q" placeholder="Search candidates, skills, jobs…" aria-label="Search"></form>
+          <div class="spacer"></div>
+          ${api.mode === 'demo' ? '<span class="demo-pill" title="Sample data. Connect Supabase in config.js to go live.">Demo data</span>' : ''}
+          ${!isInt ? `<a class="btn primary" href="#/upload" aria-label="Add candidates">${icon('upload', 16)}<span class="lbl">Add candidates</span></a>` : ''}
+        </header>
+        <main class="page" id="page" tabindex="-1"></main>
+      </div></div>`;
+    $('#logout').onclick = async () => { await api.signOut(); state.me = null; boot(); };
+    $('#menu').onclick = () => $('#side').classList.toggle('open');
+    $('#search').onsubmit = e => { e.preventDefault(); location.hash = `#/candidates?q=${encodeURIComponent($('#q').value)}`; };
+  }
+
+  /* ───────── router ───────── */
+  async function route() {
+    if (!state.me) return;
+    const [path, qs] = (location.hash.slice(2) || (state.me.role === 'interviewer' ? 'interviews' : 'dashboard')).split('?');
+    const [page, arg] = path.split('/');
+    const params = new URLSearchParams(qs || '');
+    state.route = page;
+    $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === (page === 'candidate' ? 'candidates' : page)));
+    $('#side')?.classList.remove('open');
+    $$('.scrim').forEach(x => x.remove());
+    const el = $('#page'); el.innerHTML = `<div class="empty"><span class="spin"></span></div>`;
+    const run = state.run = (state.run || 0) + 1;
+    try {
+      const candidateLink = async (e, id, p) => { await candidates(e, null, p); if (id) openCandidate(id); };
+      const fn = { dashboard, jobs: arg ? jobDetail : jobsPage, pipeline, candidates, candidate: candidateLink, upload, interviews, settings }[page] || dashboard;
+      await fn(el, arg, params);
+    } catch (e) { if (run !== state.run) return; el.innerHTML = `<div class="card empty">Could not load this page. ${esc(e.message)}</div>`; console.error(e); }
+    refreshBadge();
+  }
+  async function refreshBadge() {
+    try { const cards = await api.cards(); const n = cards.filter(c => c.stage_id === 2 && c.verdict && c.verdict !== 'low_fit').length;
+      const b = $('#nav-review'); if (b) { b.hidden = !n; b.textContent = n; } } catch (e) { }
+  }
+
+  /* ───────── dashboard ───────── */
+  async function dashboard(el) {
+    const [jobs, cards, ivs] = await Promise.all([api.jobs(), api.cards(), api.interviews()]);
+    state.jobs = jobs;
+    const open = jobs.filter(j => j.status === 'open');
+    const week = cards.filter(c => Date.now() - new Date(c.created_at) < 7 * 864e5);
+    const review = cards.filter(c => c.stage_id === 2 && c.verdict).sort((a, b) => (b.score || 0) - (a.score || 0));
+    const today = new Date().toDateString();
+    const upcoming = ivs.filter(i => i.status === 'scheduled' && new Date(i.scheduled_at) > Date.now() - 36e5);
+    const todayN = ivs.filter(i => i.status === 'scheduled' && new Date(i.scheduled_at).toDateString() === today).length;
+    const scored = cards.filter(c => c.score != null);
+    const avg = scored.length ? Math.round(scored.reduce((a, c) => a + c.score, 0) / scored.length) : 0;
+    const jobTitle = id => jobs.find(j => j.id === id)?.title || '';
+    const hour = new Date().getHours();
+    const counts = STAGES.filter(s => s.id !== 7).map(s => ({ s, n: cards.filter(c => c.stage_id !== 7 && posOf(c.stage_id) >= s.position).length }));
+    const max = Math.max(1, counts[0].n);
+    el.innerHTML = `
+      <div class="page-head"><div><h1>Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${esc(state.me.full_name.split(' ')[0])}</h1>
+        <p>${review.length} candidates are scored and waiting for your decision.</p></div>
+        <a class="btn" href="#/jobs">${icon('plus', 16)}New job</a></div>
+      <section class="kpis">
+        ${kpi('Open roles', open.length, 'jobs', `${jobs.length - open.length} in draft or closed`, '#/jobs?status=open')}
+        ${kpi('Applicants this week', week.length, 'people', `${cards.length} in total`, '#/candidates?range=week')}
+        ${kpi('Awaiting review', review.length, 'spark', `Average AI score ${avg}`, '#/candidates?view=review')}
+        ${kpi('Interviews today', todayN, 'cal', `${upcoming.length} upcoming`, '#/interviews?day=today')}
+      </section>
+      <section class="dash">
+        <div class="card"><div class="card-h"><h3>Needs your review</h3><a class="btn sm ghost" href="#/pipeline">Open pipeline →</a></div>
+          <div class="list">${review.slice(0, 7).map(c => `
+            <div class="li" data-app="${c.id}" tabindex="0">${ring(c.score, c.verdict, 40)}
+              <div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${esc(jobTitle(c.job_id))} · ${ago(c.created_at)}</span></div>${chip(c)}</div>`).join('') || '<div class="empty">Nothing waiting. New applications will appear here once scored.</div>'}</div></div>
+        <div style="display:grid;gap:18px;align-content:start">
+          <div class="card"><div class="card-h"><h3>Upcoming interviews</h3><a class="btn sm ghost" href="#/interviews">All →</a></div>
+            <div class="list">${upcoming.slice(0, 4).map(i => `
+              <div class="li" data-app="${i.application_id}" tabindex="0"><div style="text-align:center;min-width:44px"><div class="mono" style="font-weight:600">${fmtTime(i.scheduled_at)}</div><div class="small muted">${fmtDate(i.scheduled_at)}</div></div>
+                <div class="grow"><b>${esc(i.applications?.candidates?.full_name || i.applications?.resumes?.file_name)}</b><span class="small muted">${stageName(i.stage_id)} · ${esc(ivWho(i))}</span></div></div>`).join('') || '<div class="empty">No interviews scheduled.</div>'}</div></div>
+          <div class="card"><div class="card-h"><h3>Hiring funnel</h3><span class="small muted">all open roles</span></div>
+            <div class="card-b funnel">${counts.map(({ s, n }) => `<div class="fr"><span>${s.name}</span><div class="bar"><i style="width:${n / max * 100}%"></i></div><span class="num" style="text-align:right">${n}</span></div>`).join('')}</div></div>
+        </div>
+      </section>`;
+    bindApps(el);
+  }
+  const kpi = (l, v, ic, t, href) => `<a class="card kpi kpi-link" href="${href}" aria-label="${l}: ${v}. Show the list"><span class="ico">${icon(ic)}</span><span class="l">${l}</span><span class="v num">${v}</span><span class="small muted">${t}</span></a>`;
+  const filterBar = (label, href) => `<div class="filter-bar">${icon('check', 15)}<span>Showing <b>${label}</b></span><a href="${href}">Show all</a></div>`;
+  const bindApps = el => $$('[data-app]', el).forEach(n => { n.onclick = () => openCandidate(n.dataset.app); n.onkeydown = e => e.key === 'Enter' && openCandidate(n.dataset.app); });
+
+  /* ───────── jobs ───────── */
+  const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#178A35', '#5DBB2C', '#8FBF1F', '#B4720E', '#1C8B57'];
+  async function jobsPage(el, _a, params) {
+    const jobs = state.jobs = await api.jobs();
+    const canEdit = ['admin', 'recruiter'].includes(state.me.role);
+    const only = params?.get('status');
+    const shown = only ? jobs.filter(j => j.status === only) : jobs.filter(j => j.status !== 'closed');
+    const closedN = jobs.filter(j => j.status === 'closed').length;
+    el.innerHTML = `<div class="page-head"><div><h1>Jobs</h1><p>${jobs.filter(j => j.status === 'open').length} open roles · ${jobs.reduce((a, j) => a + j.total, 0)} applicants</p></div>
+      ${canEdit ? `<button class="btn primary" id="newjob">${icon('plus', 16)}New job</button>` : ''}</div>
+      ${only ? filterBar(`${only.replace('_', ' ')} roles (${shown.length})`, '#/jobs') : ''}
+      ${!only && closedN ? `<div class="small muted">Closed jobs are hidden here, in the Pipeline and on the careers page. <a href="#/jobs?status=closed">View closed jobs (${closedN})</a></div>` : ''}
+      <div class="jobs">${shown.map(j => {
+        const active = j.total - (j.byStage[7] || 0);
+        return `<article class="card job" data-job="${j.id}" tabindex="0">
+          <div class="job-top"><div><h3>${esc(j.title)}</h3><div class="small muted" style="margin-top:4px">${esc(j.department || '')} · ${esc(j.location || '')}</div></div>
+            <span class="chip st-${j.status}">${j.status.replace('_', ' ')}</span></div>
+          <div><div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">Pipeline</span><span class="small num">${active} active</span></div>
+            <div class="stagebar">${[1, 2, 3, 4, 8, 5, 6].map((s, k) => `<i style="width:${(j.byStage[s] || 0) / Math.max(1, active) * 100}%;background:${STAGE_COLORS[k]}" title="${stageName(s)}: ${j.byStage[s] || 0}"></i>`).join('')}</div></div>
+          <div class="job-foot"><span>${j.rules === null ? '<span style="color:var(--review)">No AI brief yet</span>' : `${j.byStage[2] || 0} screened · ${(j.byStage[3] || 0) + (j.byStage[4] || 0) + (j.byStage[8] || 0)} interviewing`}</span><span>${fmtDate(j.created_at)}</span></div>
+        </article>`; }).join('') || `<div class="card empty">${only ? `No ${only.replace('_', ' ')} roles right now.` : 'No jobs yet. Create the first role to start screening.'}</div>`}</div>`;
+    $$('[data-job]', el).forEach(n => { n.onclick = () => location.hash = `#/jobs/${n.dataset.job}`; n.onkeydown = e => e.key === 'Enter' && n.click(); });
+    if (canEdit) $('#newjob').onclick = () => jobForm();
+  }
+  async function jobForm(job) {
+    let team = [];
+    try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { fail(e); }
+    const m = modal(job ? 'Edit job' : 'New job', `
+      <div class="field"><label for="jt">Job title</label><input class="input" id="jt" required value="${esc(job?.title)}" placeholder="e.g. Sales Development Representative"></div>
+      <div class="grid2"><div class="field"><label for="jd2">Department</label><input class="input" id="jd2" value="${esc(job?.department)}" placeholder="Sales"></div>
+        <div class="field"><label for="jl">Location</label><input class="input" id="jl" value="${esc(job?.location)}" placeholder="Ahmedabad · Hybrid"></div></div>
+      <div class="grid2"><div class="field"><label for="je">Employment type</label><select class="input" id="je">${['Full-time', 'Part-time', 'Contract', 'Internship'].map(t => `<option ${job?.employment_type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+        <div class="field"><label for="jo">Openings</label><input class="input" id="jo" type="number" min="1" value="${job?.openings || 1}"></div></div>
+      <div class="field"><label for="jx">Job description</label><textarea class="input" id="jx" rows="7" placeholder="Paste the JD. Candidates see it on the careers site and the AI reads it when screening.">${esc(job?.jd_text)}</textarea></div>
+      <div class="modal-sec"><h3>Hiring panel and rounds</h3></div><div id="jpr" style="display:grid;gap:14px"></div>`,
+      `<button class="btn" data-close>Cancel</button><button class="btn primary" id="save">${job ? 'Save changes' : 'Create job'}</button>`);
+    m.el.querySelector('.modal').classList.add('wide');
+    const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [] }, team, true);
+    $('#save', m.el).onclick = async () => {
+      const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
+        employment_type: $('#je', m.el).value, openings: +$('#jo', m.el).value || 1, jd_text: $('#jx', m.el).value.trim() };
+      if (!d.title) return toast('Add a job title first.', true);
+      const v = ed.value(); if (v.error) return toast(v.error, true);
+      Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds });
+      const btn = $('#save', m.el); btn.disabled = true;
+      try { if (job) { await api.updateJob(job.id, d); m.close(); toast('Job updated'); route(); }
+            else { const j = await api.createJob(d); m.close(); toast('Job created. Now write the AI screening brief.'); location.hash = `#/jobs/${j.id}?tab=brief`; } }
+      catch (e) { btn.disabled = false; fail(e); }
+    };
+  }
+
+  async function jobDetail(el, id, params) {
+    const job = await api.job(id);
+    const canEdit = ['admin', 'recruiter'].includes(state.me.role);
+    let tab = params.get('tab') || 'brief'; if (tab === 'rules') tab = 'brief';
+    const careers = (CFG.CAREERS_URL || '').replace(/\/$/, '');
+    el.innerHTML = `<div class="page-head"><div><a href="#/jobs" class="small" style="text-decoration:none">← All jobs</a><h1 style="margin-top:6px">${esc(job.title)}</h1>
+        <p>${esc(job.department || '')} · ${esc(job.location || '')} · ${esc(job.employment_type || '')} · ${job.openings} opening${job.openings > 1 ? 's' : ''}</p></div>
+      <div class="row">${canEdit ? `<select class="input" id="status" style="width:auto" aria-label="Job status">${['draft', 'open', 'on_hold', 'closed'].map(s => `<option value="${s}" ${job.status === s ? 'selected' : ''}>${s === 'on_hold' ? 'On hold' : s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select>
+        <button class="btn" id="edit">Edit</button>` : ''}${job.status === 'open' && job.slug ? `<a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Careers page ↗</a>` : ''}<a class="btn primary" href="#/pipeline/${job.id}">${icon('board', 16)}Open pipeline</a></div></div>
+      <div class="tabs" role="tablist">${[['brief', 'AI screening'], ['team', 'Panel and rounds'], ['form', 'Application form'], ['jd', 'Job description']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
+      <div id="tabbody"></div>`;
+    $$('[data-tab]', el).forEach(b => b.onclick = () => location.hash = `#/jobs/${id}?tab=${b.dataset.tab}`);
+    if (canEdit) {
+      $('#status').onchange = async e => { try { await api.updateJob(id, { status: e.target.value }); toast(e.target.value === 'open' ? 'Job is open and live on the careers page' : 'Status updated'); } catch (er) { fail(er); } };
+      $('#edit').onclick = () => jobForm(job);
+    }
+    const body = $('#tabbody');
+    if (tab === 'jd') { body.innerHTML = `<div class="card card-b jd">${esc(job.jd_text) || '<span class="muted">No description yet.</span>'}</div>`; return; }
+    if (tab === 'team') return panelBuilder(body, job, canEdit);
+    if (tab === 'form') return formBuilder(body, job, canEdit);
+    rulesBuilder(body, job, canEdit);
+  }
+
+  function rulesBuilder(body, job, canEdit) {
+    const r = job.rules ? JSON.parse(JSON.stringify(job.rules)) : { disqualifiers: [], factors: [], pass_score: 70, review_score: 50, ai_instructions: '' };
+    r.disqualifiers = r.disqualifiers || []; r.factors = r.factors || [];
+    const dis = canEdit ? '' : 'disabled';
+    const draw = () => {
+      const total = r.factors.reduce((a, f) => a + Number(f.weight || 0), 0);
+      const fixed = r.factors.length > 0;
+      const weightsOk = !fixed || total === 100;
+      body.innerHTML = `<div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:18px" class="rules-grid">
+        <div style="display:grid;gap:18px;align-content:start">
+          <div class="card"><div class="card-h"><div><h3>Screening brief for the AI</h3><div class="small muted">Describe the ideal candidate in plain English: what they must have, what makes someone great, and what to be careful about. The AI scores every applicant against this brief, the job description and their form answers.</div></div></div>
+            <div class="card-b" style="display:grid;gap:8px"><textarea class="input" id="aiins" rows="10" maxlength="6000" aria-label="Screening brief for the AI" placeholder="e.g. We need someone who has done outbound cold calling for at least 2 years, ideally selling to US companies. Must have used HubSpot or Salesforce. Great candidates give numbers (dials a day, meetings booked, quota hit). Agency SDR experience counts the same as SaaS. Internships count as half. A Loom video that is confident and clear is a strong plus." ${dis}>${esc(r.ai_instructions)}</textarea>
+              <div class="small muted">The AI ignores anything about age, gender, religion, caste, nationality, marital status or photos.</div></div></div>
+          <details class="card" ${r.disqualifiers.length || fixed ? 'open' : ''}><summary class="card-h" style="cursor:pointer"><div><h3>Optional: fixed must-haves and criteria</h3><div class="small muted">Leave these empty and the AI picks the must-haves and 3 to 6 weighted criteria from your brief for each candidate. Add them only if you want exact, comparable scoring.</div></div></summary>
+            <div class="card-b" style="display:grid;gap:16px">
+              <div style="display:grid;gap:8px"><b>Must-haves</b><span class="small muted">Not meeting one flags the candidate as Disqualified for a recruiter to confirm.</span>
+                ${r.disqualifiers.map((d, i) => `<div class="rule-row"><input class="input" data-dq="${i}" value="${esc(d.rule)}" placeholder="e.g. At least 2 years of B2B sales experience" ${dis}>
+                ${canEdit ? `<button class="icon-btn" data-dqdel="${i}" aria-label="Remove">${icon('trash')}</button>` : ''}</div>`).join('')}
+                ${canEdit ? `<button class="btn sm" id="adddq" style="justify-self:start">${icon('plus', 14)}Add must-have</button>` : ''}</div>
+              <div style="display:grid;gap:10px"><b>Scoring criteria</b><span class="small muted">The AI rates each from 0 to 10; weights turn ratings into a score out of 100.</span>
+                ${r.factors.map((f, i) => `<div class="factor">
+                  <input class="input" data-fn="${i}" value="${esc(f.name)}" placeholder="Criterion, e.g. Cold calling" ${dis}>
+                  <input class="input" data-fg="${i}" value="${esc(f.guidance)}" placeholder="What does a 10 look like? (optional)" ${dis}>
+                  <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="range" min="0" max="100" step="5" value="${f.weight}" data-fw="${i}" aria-label="Weight" ${dis}><span class="weight">${f.weight}%</span></div>
+                  ${canEdit ? `<button class="icon-btn" data-fdel="${i}" aria-label="Remove">${icon('trash')}</button>` : '<span></span>'}</div>`).join('')}
+                <div class="row" style="justify-content:space-between">${canEdit ? `<button class="btn sm" id="addf">${icon('plus', 14)}Add criterion</button>` : '<span></span>'}
+                  ${fixed ? `<div class="total ${total === 100 ? 'ok' : 'bad'}">${total === 100 ? icon('check', 16) : ''}Weights total ${total}%${total === 100 ? '' : ' · must equal 100'}</div>` : '<span class="small muted">No fixed criteria: the AI chooses them.</span>'}</div></div>
+            </div></details>
+        </div>
+        <div style="display:grid;gap:18px;align-content:start">
+          <div class="card"><div class="card-h"><h3>Verdict thresholds</h3></div><div class="card-b" style="display:grid;gap:14px">
+            <div class="field"><label for="ps">Pass at or above</label><div class="row" style="flex-wrap:nowrap"><input type="range" id="ps" min="40" max="95" step="5" value="${r.pass_score}" ${dis} style="flex:1;accent-color:var(--pass)"><span class="weight">${r.pass_score}</span></div></div>
+            <div class="field"><label for="rs">Review at or above</label><div class="row" style="flex-wrap:nowrap"><input type="range" id="rs" min="20" max="90" step="5" value="${r.review_score}" ${dis} style="flex:1;accent-color:var(--review)"><span class="weight">${r.review_score}</span></div></div>
+            <div style="display:flex;height:10px;border-radius:6px;overflow:hidden"><i style="width:${r.review_score}%;background:var(--low)"></i><i style="width:${r.pass_score - r.review_score}%;background:var(--review)"></i><i style="flex:1;background:var(--pass)"></i></div>
+            <div class="row small" style="justify-content:space-between"><span class="chip v-low_fit">Low fit</span><span class="chip v-review">Review</span><span class="chip v-pass">Pass</span></div>
+          </div></div>
+          <div class="card card-b" style="display:grid;gap:10px">
+            <div class="row" style="gap:8px">${icon('spark', 18)}<h3>How screening works</h3></div>
+            <p class="small muted" style="margin:0">Every new application, from the careers site or uploaded here, is read by AI within a minute. It follows your brief, checks the must-haves, rates the criteria with quoted evidence and suggests a verdict. Recruiters make every final decision.</p>
+            ${job.rules ? `<div class="small muted">Active version ${job.rules.version}</div>` : ''}
+            ${canEdit ? `<button class="btn primary" id="saverules" ${weightsOk ? '' : 'disabled'}>Save screening setup</button><button class="btn" id="rescreen">${icon('refresh', 16)}Rescreen candidates</button>` : ''}
+          </div>
+        </div></div>`;
+      if (!canEdit) return;
+      $$('[data-dq]', body).forEach(n => n.oninput = () => r.disqualifiers[n.dataset.dq].rule = n.value);
+      $$('[data-fn]', body).forEach(n => n.oninput = () => r.factors[n.dataset.fn].name = n.value);
+      $$('[data-fg]', body).forEach(n => n.oninput = () => r.factors[n.dataset.fg].guidance = n.value);
+      $$('[data-fw]', body).forEach(n => n.oninput = () => { r.factors[n.dataset.fw].weight = +n.value; draw(); $(`[data-fw="${n.dataset.fw}"]`, body).focus(); });
+      $$('[data-dqdel]', body).forEach(n => n.onclick = () => { r.disqualifiers.splice(+n.dataset.dqdel, 1); draw(); });
+      $$('[data-fdel]', body).forEach(n => n.onclick = () => { r.factors.splice(+n.dataset.fdel, 1); draw(); });
+      $('#adddq', body).onclick = () => { r.disqualifiers.push({ id: 'd' + Date.now(), rule: '' }); draw(); };
+      $('#addf', body).onclick = () => { r.factors.push({ id: 'f' + Date.now(), name: '', weight: r.factors.length ? 0 : 100, guidance: '' }); draw(); };
+      $('#ps', body).oninput = e => { r.pass_score = +e.target.value; if (r.review_score >= r.pass_score) r.review_score = r.pass_score - 5; draw(); $('#ps', body).focus(); };
+      $('#rs', body).oninput = e => { r.review_score = Math.min(+e.target.value, r.pass_score - 5); draw(); $('#rs', body).focus(); };
+      $('#aiins', body).oninput = e => { r.ai_instructions = e.target.value; };
+      $('#saverules', body).onclick = async () => {
+        const clean = { disqualifiers: r.disqualifiers.filter(d => d.rule.trim()).map((d, i) => ({ id: 'd' + (i + 1), rule: d.rule.trim() })),
+          factors: r.factors.filter(f => f.name.trim()).map((f, i) => ({ id: 'f' + (i + 1), name: f.name.trim(), weight: +f.weight, guidance: (f.guidance || '').trim() })),
+          pass_score: r.pass_score, review_score: r.review_score, ai_instructions: (r.ai_instructions || '').trim() };
+        if (clean.factors.length && clean.factors.reduce((a, f) => a + f.weight, 0) !== 100) return toast('Weights of the named criteria must total 100, or remove them to let the AI choose.', true);
+        if (!clean.ai_instructions && !clean.factors.length && !(job.jd_text || '').trim()) return toast('Write a short brief (or add a job description) so the AI knows what to look for.', true);
+        try { const saved = await api.saveRules(job.id, clean); job.rules = saved; Object.assign(r, JSON.parse(JSON.stringify(saved))); toast(`Screening setup saved (version ${saved.version})`); draw(); } catch (e) { fail(e); }
+      };
+      $('#rescreen', body).onclick = async () => { try { const n = await api.rescreenJob(job.id); toast(n ? `${n} candidates sent for rescreening` : 'No candidates in Applied or Screened to rescreen'); } catch (e) { fail(e); } };
+    };
+    draw();
+  }
+
+  /* Hiring panel and interview rounds: shared editor used by the New job form and the job's tab */
+  const ROUND_NAMES = ['Intro call', 'Skills interview', 'Final interview'];
+  function panelRoundsEditor(host, st, team, canEdit) {
+    const dis = canEdit ? '' : 'disabled';
+    st.panel = (st.panel || []).filter(id => team.some(t => t.id === id));
+    st.rounds = JSON.parse(JSON.stringify(st.rounds || []));
+    // Each round can have several interviewers; old rounds only had interviewer_id
+    const idsOf = rd => (Array.isArray(rd.interviewer_ids) && rd.interviewer_ids.length ? rd.interviewer_ids : (rd.interviewer_id ? [rd.interviewer_id] : []));
+    st.rounds.forEach(rd => { rd.interviewer_ids = idsOf(rd); });
+    const draw = () => {
+      const inPanel = team.filter(t => st.panel.includes(t.id));
+      host.innerHTML = `<div class="field"><label>Hiring panel</label><div class="small muted">Who is involved in hiring for this role.</div>
+          <div style="display:grid;gap:6px;margin-top:4px">${team.map(t => `<label class="row panel-pick" style="gap:10px;flex-wrap:nowrap"><input type="checkbox" data-pm="${t.id}" ${st.panel.includes(t.id) ? 'checked' : ''} ${dis}>${avatar(t.full_name, 28)}
+            <span class="grow"><b>${esc(t.full_name)}</b><span class="small muted" style="display:block">${esc(t.title || '')}${t.title ? ' · ' : ''}${esc(t.email)}</span></span>
+            ${!t.meeting_link && !t.booking_url ? '<span class="chip v-review" title="Add a meeting link in Settings → Interview panel">No meeting link</span>' : ''}</label>`).join('') || '<div class="small muted">No one in the interview panel yet.</div>'}</div>
+          <a class="small" href="#/settings?tab=panel" data-close>Add or edit people in Settings → Interview panel</a></div>
+        <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
+        <div class="small muted" style="margin-top:-6px">Moving a candidate into a round emails them a link to book a time. Tick more than one interviewer to have them all on the same call; only times when everyone is free are offered.</div>
+        ${st.rounds.map((rd, i) => `<div class="round-row"><span class="round-n">Round ${i + 1}</span>
+          <div class="field"><label for="rn${i}">Name</label><input class="input" id="rn${i}" data-rn="${i}" value="${esc(rd.name)}" placeholder="${ROUND_NAMES[i]}" ${dis}></div>
+          <div class="field"><span class="lbl" style="font-size:12.5px;font-weight:600">Interviewers</span><div class="iv-picks" role="group" aria-label="Interviewers for Round ${i + 1}">${inPanel.map(t => `<label class="iv-pick ${rd.interviewer_ids.includes(t.id) ? 'on' : ''}"><input type="checkbox" data-ri="${i}" value="${t.id}" ${rd.interviewer_ids.includes(t.id) ? 'checked' : ''} ${dis}>${esc(t.full_name)}</label>`).join('') || '<span class="small muted">Tick people in the hiring panel first</span>'}</div></div>
+          <div class="field"><label for="rd${i}">Length</label><select class="input" id="rd${i}" data-rd="${i}" ${dis}>${[15, 30, 45, 60, 90].map(m => `<option value="${m}" ${+rd.duration === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></div></div>`).join('')}
+        ${st.rounds.length && !inPanel.length ? '<div class="small" style="color:var(--review)">Tick people in the hiring panel first, then choose the interviewers for each round.</div>' : ''}`;
+      if (!canEdit) return;
+      $$('[data-pm]', host).forEach(n => n.onchange = () => { st.panel = n.checked ? [...st.panel, n.dataset.pm] : st.panel.filter(x => x !== n.dataset.pm);
+        st.rounds.forEach(rd => { rd.interviewer_ids = rd.interviewer_ids.filter(x => st.panel.includes(x)); }); draw(); });
+      $('#rc', host).onchange = e => { const n = +e.target.value;
+        while (st.rounds.length < n) st.rounds.push({ name: ROUND_NAMES[st.rounds.length], duration: 30, interviewer_ids: st.panel.length === 1 ? [st.panel[0]] : [] });
+        st.rounds = st.rounds.slice(0, n); draw(); };
+      $$('[data-rn]', host).forEach(n => n.oninput = () => st.rounds[n.dataset.rn].name = n.value);
+      $$('[data-ri]', host).forEach(n => n.onchange = () => { const rd = st.rounds[n.dataset.ri];
+        rd.interviewer_ids = n.checked ? [...new Set([...rd.interviewer_ids, n.value])] : rd.interviewer_ids.filter(x => x !== n.value); draw(); });
+      $$('[data-rd]', host).forEach(n => n.onchange = () => st.rounds[n.dataset.rd].duration = +n.value);
+    };
+    draw();
+    return {
+      value() {
+        const rounds = st.rounds.map((rd, i) => ({ name: (rd.name || '').trim() || ROUND_NAMES[i], duration: +rd.duration || 30,
+          interviewer_id: rd.interviewer_ids[0] || null, interviewer_ids: [...rd.interviewer_ids] }));
+        const missing = rounds.findIndex(rd => !rd.interviewer_ids.length);
+        return { error: missing >= 0 ? `Choose at least one interviewer for Round ${missing + 1}.` : null, hiring_panel: [...st.panel], rounds };
+      }
+    };
+  }
+  async function panelBuilder(body, job, canEdit) {
+    const team = (await api.team()).filter(t => t.active !== false);
+    body.innerHTML = `<div class="card" style="max-width:860px"><div class="card-h"><div><h3>Hiring panel and interview rounds</h3><div class="small muted">Choose who hires for this role, how many interview rounds there are, and who runs each one.</div></div></div>
+      <div class="card-b" style="display:grid;gap:14px"><div id="pr" style="display:grid;gap:14px"></div>
+      ${canEdit ? '<button class="btn primary" id="savepanel" style="justify-self:start">Save panel and rounds</button>' : ''}</div></div>`;
+    const ed = panelRoundsEditor($('#pr', body), { panel: job.hiring_panel, rounds: job.rounds }, team, canEdit);
+    let redrawCal = () => {};
+    if (CFG.CALCOM_CREATE_URL) {
+      const cal = document.createElement('div'); cal.className = 'card'; cal.style.maxWidth = '860px';
+      const byId = Object.fromEntries(team.map(t => [t.id, t]));
+      const drawCal = () => {
+        const links = job.cal_links || {};
+        const rows = (job.rounds || []).map((rd, i) => {
+          const n = i + 1, ids = (rd.interviewer_ids && rd.interviewer_ids.length ? rd.interviewer_ids : [rd.interviewer_id]).filter(Boolean);
+          const lead = byId[ids[0]], l = links[n], acct = lead && lead.cal_account;
+          const mine = l && l.url && acct && l.account === acct;
+          const who = ids.map(x => byId[x] ? byId[x].full_name.split(' ')[0] : '').filter(Boolean).join(' & ') || 'No interviewer yet';
+          let right;
+          if (mine) right = `<a class="btn sm" href="${esc(l.url)}" target="_blank" rel="noopener">Open ↗</a><span class="small muted mono" style="word-break:break-all">${esc(l.url)}</span>`;
+          else if (!lead) right = '<span class="small muted">Choose an interviewer and save first.</span>';
+          else if (!acct) right = `<span class="small muted">${esc(lead.full_name.split(' ')[0])} hasn't connected Cal.com, so candidates get ${lead.booking_url ? 'their own booking link' : 'the ATS booking page'}.</span>`;
+          else right = canEdit ? `<button class="btn primary sm" data-mkcal="${n}">Create link in ${esc(lead.full_name.split(' ')[0])}'s Cal.com</button>${l && l.url ? '<span class="small" style="color:var(--review)">The interviewer changed, so the old link is no longer used.</span>' : ''}` : '<span class="small muted">No link yet</span>';
+          return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;padding:10px 0;border-top:1px solid var(--line)"><span style="min-width:190px"><b>Round ${n}</b> · ${esc(rd.name || '')}<br><span class="small muted">${esc(who)}</span></span><span class="row" style="gap:10px;flex-wrap:wrap;flex:1">${right}</span></div>`;
+        }).join('');
+        cal.innerHTML = `<div class="card-h"><div><h3>Cal.com booking links</h3><div class="small muted">Each round gets its own link in the lead interviewer's Cal.com. Candidates moved into that round get it with their name and email filled in, and each booking shows in the calendar as "${esc(job.title)} · round name · candidate name". Bookings come back into the ATS and the pipeline card turns blue.</div></div></div>
+          <div class="card-b">${rows || '<p class="small muted" style="margin:0">Set up the interview rounds above and save, then create a link for each round.</p>'}</div>`;
+        $$('[data-mkcal]', cal).forEach(b => b.onclick = async () => { const n = +b.dataset.mkcal; b.disabled = true; b.textContent = 'Creating…';
+          try { const r = await api.createCalLink(job.id, n); job.cal_links = { ...(job.cal_links || {}), [n]: { url: r.booking_url, event_type_id: r.event_type_id, account: r.account } }; toast(r.message || 'Cal.com link created'); drawCal(); }
+          catch (e) { b.disabled = false; b.textContent = 'Try again'; fail(e); } });
+      };
+      redrawCal = drawCal; drawCal(); body.append(cal);
+    }
+    if (!canEdit) return;
+    $('#savepanel', body).onclick = async () => {
+      const v = ed.value(); if (v.error) return toast(v.error, true);
+      try { await api.updateJob(job.id, { hiring_panel: v.hiring_panel, rounds: v.rounds }); job.hiring_panel = v.hiring_panel; job.rounds = v.rounds; toast('Panel and rounds saved'); redrawCal(); } catch (e) { fail(e); }
+    };
+  }
+
+  /* Custom application form for one job */
+  const FIELD_TYPES = [['text', 'Short answer'], ['textarea', 'Long answer'], ['url', 'Link (e.g. Loom, portfolio)'], ['email', 'Email'], ['number', 'Number'], ['select', 'Pick one'], ['file', 'File upload']];
+  function formBuilder(body, job, canEdit) {
+    let fields = JSON.parse(JSON.stringify(job.form_fields || []));
+    const dis = canEdit ? '' : 'disabled';
+    const careers = (CFG.CAREERS_URL || '').replace(/\/$/, '');
+    const draw = () => {
+      body.innerHTML = `<div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:18px" class="rules-grid">
+        <div class="card"><div class="card-h"><div><h3>Application form</h3><div class="small muted">Name, email, phone, LinkedIn and resume are always asked. Add the questions this role needs.</div></div></div>
+          <div class="card-b" style="display:grid;gap:12px">
+            <div class="fixed-fields">${['Full name', 'Email', 'Phone', 'LinkedIn', 'Resume (PDF or DOCX)'].map(l => `<span class="tag">${l}</span>`).join('')}</div>
+            ${fields.map((f, i) => `<div class="ff-row">
+              <div class="grid2"><div class="field"><label for="fl${i}">Question</label><input class="input" id="fl${i}" data-fl="${i}" value="${esc(f.label)}" placeholder="e.g. Share a 2-minute Loom introducing yourself" ${dis}></div>
+                <div class="field"><label for="ft${i}">Answer type</label><select class="input" id="ft${i}" data-ft="${i}" ${dis}>${FIELD_TYPES.map(([k, l]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+              ${f.type === 'select' ? `<div class="field"><label for="fo${i}">Choices (one per line)</label><textarea class="input" rows="3" id="fo${i}" data-fo="${i}" ${dis}>${esc((f.options || []).join('\n'))}</textarea></div>` : ''}
+              <div class="field"><label for="fh${i}">Help text (optional)</label><input class="input" id="fh${i}" data-fh="${i}" value="${esc(f.help)}" ${dis}></div>
+              <div class="row" style="justify-content:space-between"><label class="row small" style="gap:6px"><input type="checkbox" data-fr="${i}" ${f.required ? 'checked' : ''} ${dis}> Required</label>
+                ${canEdit ? `<div class="row" style="gap:4px"><button class="icon-btn" data-fup="${i}" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button><button class="icon-btn" data-fdown="${i}" aria-label="Move down" ${i === fields.length - 1 ? 'disabled' : ''}>↓</button><button class="icon-btn" data-fx="${i}" aria-label="Remove question">${icon('trash')}</button></div>` : ''}</div></div>`).join('')}
+            ${canEdit ? `<div class="row" style="gap:8px"><button class="btn sm" id="addq">${icon('plus', 14)}Add question</button>
+              <button class="btn sm ghost" id="addloom">+ Loom video link</button><button class="btn sm ghost" id="adddoc">+ Extra document</button></div>
+              <button class="btn primary" id="saveform" style="justify-self:start">Save form</button>` : ''}</div></div>
+        <div style="display:grid;gap:18px;align-content:start"><div class="card card-b" style="display:grid;gap:10px"><h3>On the careers site</h3>
+          ${job.status === 'open' ? `<p class="small muted" style="margin:0">This role is live. Applicants fill in this form, and their answers and files go to the AI screening and appear on the candidate's profile.</p>
+            <a class="btn" href="${esc(careers)}/roles/${esc(job.slug)}" target="_blank" rel="noopener">Open the role page ↗</a><span class="small muted mono" style="word-break:break-all">${esc(careers)}/roles/${esc(job.slug)}</span>`
+            : `<p class="small muted" style="margin:0">Set the job to Open to publish it on the careers site.</p>`}</div></div></div>`;
+      if (!canEdit) return;
+      const bind = (attr, fn) => $$(`[data-${attr}]`, body).forEach(n => fn(n, +n.dataset[attr]));
+      bind('fl', (n, i) => n.oninput = () => fields[i].label = n.value);
+      bind('fh', (n, i) => n.oninput = () => fields[i].help = n.value);
+      bind('fo', (n, i) => n.oninput = () => fields[i].options = n.value.split('\n').map(x => x.trim()).filter(Boolean));
+      bind('fr', (n, i) => n.onchange = () => fields[i].required = n.checked);
+      bind('ft', (n, i) => n.onchange = () => { fields[i].type = n.value; draw(); });
+      bind('fx', (n, i) => n.onclick = () => { fields.splice(i, 1); draw(); });
+      bind('fup', (n, i) => n.onclick = () => { [fields[i - 1], fields[i]] = [fields[i], fields[i - 1]]; draw(); });
+      bind('fdown', (n, i) => n.onclick = () => { [fields[i + 1], fields[i]] = [fields[i], fields[i + 1]]; draw(); });
+      const add = f => { fields.push({ id: 'q' + Date.now().toString(36), required: false, help: '', ...f }); draw(); };
+      $('#addq', body).onclick = () => add({ label: '', type: 'text' });
+      $('#addloom', body).onclick = () => add({ label: 'Loom video introducing yourself', type: 'url', help: 'Paste a link to a short Loom video (2 minutes is plenty).' });
+      $('#adddoc', body).onclick = () => add({ label: 'Additional document', type: 'file', help: 'PDF, DOCX, PNG or JPG, up to 5 MB.' });
+      $('#saveform', body).onclick = async () => {
+        const clean = fields.map(f => ({ id: f.id, label: (f.label || '').trim(), type: f.type || 'text', required: !!f.required, help: (f.help || '').trim(),
+          ...(f.type === 'select' ? { options: (f.options || []).filter(Boolean) } : {}) }));
+        const bad = clean.findIndex(f => !f.label);
+        if (bad >= 0) return toast(`Question ${bad + 1} needs a label.`, true);
+        const noOpts = clean.findIndex(f => f.type === 'select' && f.options.length < 2);
+        if (noOpts >= 0) return toast(`Question ${noOpts + 1} needs at least two choices.`, true);
+        try { await api.updateJob(job.id, { form_fields: clean }); job.form_fields = clean; fields = JSON.parse(JSON.stringify(clean)); toast('Application form saved'); draw(); } catch (e) { fail(e); }
+      };
+    };
+    draw();
+  }
+
+  /* ───────── pipeline ───────── */
+  async function pipeline(el, jobId, params) {
+    const allJobs = await api.jobs(); state.jobs = allJobs;
+    const jobs = allJobs.filter(j => j.status !== 'closed');
+    if (jobId && !jobs.some(j => j.id === jobId)) jobId = null;
+    if (!jobId) jobId = jobs.find(j => j.status === 'open')?.id || jobs[0]?.id;
+    if (!jobId) { el.innerHTML = `<div class="card empty">No active jobs. Create a job, or reopen a closed one from Jobs.</div>`; return; }
+    const job = jobs.find(j => j.id === jobId);
+    const roundsN = (job?.rounds || []).length;
+    let filter = params.get('v') || 'all', sort = 'score';
+    el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Blue cards</span> have an interview booked.</p></div>
+      <div class="board-tools"><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
+        <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="new">Newest</button></div></div></div>
+      <div class="board" id="board"></div>`;
+    $('#jobsel').onchange = e => location.hash = `#/pipeline/${e.target.value}`;
+    const draw = async () => {
+      let cards = await api.cards(jobId);
+      if (filter !== 'all') cards = cards.filter(c => c.verdict === filter);
+      cards.sort(sort === 'score' ? (a, b) => (b.score ?? -1) - (a.score ?? -1) : (a, b) => b.created_at.localeCompare(a.created_at));
+      const cols = STAGES.filter(s => !STAGE_ROUND[s.id] || STAGE_ROUND[s.id] <= Math.max(roundsN, 1) || cards.some(c => c.stage_id === s.id));
+      $('#board').innerHTML = cols.map(s => { const list = cards.filter(c => c.stage_id === s.id);
+        const rd = STAGE_ROUND[s.id] ? job?.rounds?.[STAGE_ROUND[s.id] - 1] : null;
+        return `<section class="col" data-stage="${s.id}" aria-label="${s.name}"><div class="col-h"><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span><span class="n">${list.length}</span></div>
+          <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="true" data-card="${c.id}" tabindex="0">
+            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div></div>
+            ${c.summary ? `<div class="sum">${esc(c.summary)}</div>` : ''}${c.interview_at ? `<div class="booked-tag">${icon('cal', 13)}<span>Booked · ${fmtDate(c.interview_at)} ${fmtTime(c.interview_at)}${c.interviewer_name ? ` · ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
+          </article>`).join('') || '<div class="small muted" style="padding:10px 4px">No one here yet</div>'}</div></section>`; }).join('');
+      $$('[data-card]').forEach(k => {
+        k.onclick = () => openCandidate(k.dataset.card);
+        k.onkeydown = e => e.key === 'Enter' && openCandidate(k.dataset.card);
+        k.ondragstart = e => { e.dataTransfer.setData('text/plain', k.dataset.card); k.classList.add('dragging'); };
+        k.ondragend = () => k.classList.remove('dragging');
+      });
+      $$('[data-stage]').forEach(col => {
+        col.ondragover = e => { e.preventDefault(); col.classList.add('drop'); };
+        col.ondragleave = () => col.classList.remove('drop');
+        col.ondrop = async e => { e.preventDefault(); col.classList.remove('drop');
+          const id = e.dataTransfer.getData('text/plain'); const st = +col.dataset.stage;
+          if (st === 7) return rejectFlow(id, draw);
+          const card = cards.find(c => c.id === id); if (card && card.stage_id === st) return;
+          try { await api.moveStage(id, st); } catch (er) { return fail(er); }
+          if (STAGE_ROUND[st]) { const rd = job?.rounds?.[STAGE_ROUND[st] - 1];
+            rd?.interviewer_id ? toast(`Moved to ${stageName(st)}. The candidate is being emailed a link to book a time.`)
+              : toast(`Moved to ${stageName(st)}. No booking email was sent: set up Round ${STAGE_ROUND[st]} under the job's Panel and rounds tab.`, true); }
+          else toast(`Moved to ${stageName(st)}${st === 5 || st === 6 ? '. The candidate is being emailed.' : ''}`);
+          draw(); };
+      });
+    };
+    $$('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; $$('[data-f]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+    $$('[data-s]').forEach(b => b.onclick = () => { sort = b.dataset.s; $$('[data-s]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+    await draw();
+    state.redraw = draw;
+  }
+
+  /* ───────── candidates table ───────── */
+  async function candidates(el, _a, params) {
+    const [all, jobs] = await Promise.all([api.cards(), api.jobs()]);
+    const title = id => jobs.find(j => j.id === id)?.title || '';
+    let q = params.get('q') || '';
+    const range = params.get('range'), view = params.get('view');
+    let cards = all, fLabel = '';
+    if (range === 'week') { cards = all.filter(c => Date.now() - new Date(c.created_at) < 7 * 864e5); fLabel = `applicants from the last 7 days (${cards.length})`; }
+    if (view === 'review') { cards = all.filter(c => c.stage_id === 2 && c.verdict).sort((a, b) => (b.score || 0) - (a.score || 0)); fLabel = `candidates awaiting review, highest score first (${cards.length})`; }
+    el.innerHTML = `<div class="page-head"><div><h1>Candidates</h1><p>${all.length} applications across ${jobs.length} jobs</p></div>
+      <input class="input" id="cq" style="max-width:320px" placeholder="Filter by name, email or job" value="${esc(q)}" aria-label="Filter"></div>
+      ${fLabel ? filterBar(fLabel, '#/candidates') : ''}
+      <div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Candidate</th><th>Job</th><th>Stage</th><th>AI score</th><th>Verdict</th><th>Applied</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+    const draw = () => {
+      const s = q.toLowerCase();
+      const list = cards.filter(c => !s || [c.full_name, c.email, title(c.job_id)].join(' ').toLowerCase().includes(s));
+      $('#rows').innerHTML = list.map(c => `<tr class="li" data-app="${c.id}" tabindex="0" style="display:table-row"><td><div class="row" style="flex-wrap:nowrap">${avatar(c.full_name, 30)}<div><b>${esc(c.full_name)}</b><div class="small muted">${esc(c.email || '')}</div></div></div></td>
+        <td>${esc(title(c.job_id))}</td><td>${stageName(c.stage_id)}</td><td class="num">${c.score ?? '—'}</td><td>${chip(c)}</td><td class="muted">${fmtDate(c.created_at)}</td></tr>`).join('')
+        || `<tr><td colspan="6" class="empty">${q ? `No candidates match "${esc(q)}".` : 'No candidates here yet.'}</td></tr>`;
+      bindApps($('#rows'));
+    };
+    $('#cq').oninput = e => { q = e.target.value; draw(); };
+    draw();
+  }
+
+  /* ───────── candidate drawer ───────── */
+  async function openCandidate(id) {
+    const s = document.createElement('div'); s.className = 'scrim';
+    s.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Candidate"><div class="empty"><span class="spin"></span></div></aside>`;
+    document.body.append(s);
+    const close = () => { s.remove(); document.removeEventListener('keydown', esc_); };
+    const esc_ = e => e.key === 'Escape' && close();
+    document.addEventListener('keydown', esc_);
+    s.addEventListener('click', e => { if (e.target === s || e.target.closest('[data-close]')) close(); });
+    const render = async () => {
+      const a = await api.application(id);
+      const c = a.candidates || {}; const sc = a.screening; const name = c.full_name || a.resumes?.file_name || 'New applicant';
+      const canAct = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
+      const card = { status: a.status, verdict: sc?.verdict };
+      const failedMails = [];
+      [...a.emails].sort((p, q) => q.sent_at.localeCompare(p.sent_at)).forEach(m => {
+        if (m.status === 'failed' && !a.emails.some(x => x.template_key === m.template_key && x.status !== 'failed' && x.sent_at > m.sent_at) && !failedMails.some(x => x.template_key === m.template_key)) failedMails.push(m); });
+      $('.drawer', s).innerHTML = `
+        <div class="drawer-h">
+          <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${avatar(name, 48)}
+            <div style="flex:1;min-width:0"><h2>${esc(name)}</h2><div class="small muted">${esc(a.jobs?.title)} · ${stageName(a.stage_id)} · applied ${fmtDate(a.created_at)}</div>
+              <div class="row" style="margin-top:8px;gap:6px">${chip(card)}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.phone ? `<span class="tag">${esc(c.phone)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}</div></div>
+            ${ring(sc?.score ?? null, sc?.verdict, 64)}<button class="x" data-close aria-label="Close">${icon('x', 20)}</button></div>
+          ${canAct ? `<div class="row" style="gap:8px">
+            <select class="input" id="mv" style="width:auto" aria-label="Move to stage">${STAGES.filter(st => st.id !== 7 && (!STAGE_ROUND[st.id] || STAGE_ROUND[st.id] <= Math.max((a.jobs?.rounds || []).length, 1) || st.id === a.stage_id)).map(st => `<option value="${st.id}" ${st.id === a.stage_id ? 'selected' : ''}>${st.name}</option>`).join('')}</select>
+            <button class="btn primary sm" id="sched">${icon('cal', 15)}Schedule interview</button>
+            <button class="btn sm" id="resume">${icon('file', 15)}Resume</button>
+            ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
+            ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}</div>` : ''}
+        </div>
+        <div class="drawer-b">
+          ${failedMails.length && canAct ? `<div class="card card-b warn-box" style="display:grid;gap:8px"><b>${failedMails.length === 1 ? 'An email to this candidate could not be sent' : failedMails.length + ' emails to this candidate could not be sent'}</b>
+            ${failedMails.map(m => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(mailName(m.template_key))} · ${new Date(m.sent_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              ${m.template_key === 'interviewer_notice' ? '' : `<button class="btn sm" data-resend="${esc(m.template_key)}">Send again</button>`}</div>`).join('')}
+            <span class="small muted">Usually this means Gmail needs reconnecting in n8n. Once it is fixed, click Send again.</span></div>` : ''}
+          ${sc ? `<div class="card card-b" style="display:grid;gap:8px;border-left:3px solid ${VCOLOR[sc.verdict]}"><div class="row" style="gap:8px">${icon('spark', 16)}<span class="eyebrow">AI summary</span></div><div style="font-size:15px">${esc(sc.summary)}</div>
+              <div class="small muted">Scored ${ago(sc.created_at)} · ${esc(sc.model || '')}</div></div>
+            <div class="card"><div class="card-h"><h3>Must-haves</h3></div><div class="card-b">${(sc.disqualifier_results || []).map(d => {
+              const col = d.result === 'met' ? 'var(--pass)' : d.result === 'not_met' ? 'var(--disq)' : 'var(--review)';
+              return `<div class="check"><span class="dot" style="background:${col}">${d.result === 'met' ? '✓' : d.result === 'not_met' ? '✕' : '?'}</span><div><b>${esc(d.rule || d.id)}</b> <span class="small" style="color:${col};font-weight:600">${d.result.replace('_', ' ')}</span>${d.evidence ? `<div class="quote">${esc(d.evidence)}</div>` : ''}</div></div>`; }).join('') || '<span class="muted">No must-haves set.</span>'}</div></div>
+            <div class="card"><div class="card-h"><h3>Criteria</h3><span class="small muted">rating out of 10 · weight</span></div><div class="card-b">${(sc.factor_scores || []).map(f => `
+              <div class="fbar"><div class="row" style="justify-content:space-between"><b>${esc(f.name || f.id)}</b><span class="num small">${f.rating}/10 · ${f.weight}%</span></div>
+                <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
+            : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
+          ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
+            ${(a.form_answers || []).map(q => `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>` : esc(q.value)}</div></div>`).join('')}
+            ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
+          ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
+            ${c.profile_summary ? `<div style="font-size:14.5px;line-height:1.6">${esc(c.profile_summary)}</div>` : ''}
+            ${!c.profile_summary && !(c.skills || []).length && !(c.work_history || []).length ? `<div class="small muted">${a.status === 'screening_failed' ? 'The profile summary, skills and work history appear here once the AI has read the resume. Click Rescreen to try again.' : 'The AI is building this profile from the resume.'}</div>` : ''}
+            ${(c.skills || []).length ? `<div class="row" style="gap:6px">${c.skills.map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>` : ''}
+            ${(c.work_history || []).map(w => `<div><b>${esc(w.title)}</b> · ${esc(w.company)} <span class="small muted">${esc(w.start || '')} – ${esc(w.end || '')}</span><div class="small muted">${esc(w.summary || '')}</div></div>`).join('')}
+            ${(c.education || []).map(e => `<div class="small"><b>${esc(e.degree)}</b> · ${esc(e.institution)} ${esc(e.year || '')}</div>`).join('')}</div></div>` : ''}
+          ${a.interviews?.length ? `<div class="card"><div class="card-h"><h3>Interviews</h3></div><div class="list">${a.interviews.map(i => `<div class="li" style="cursor:default"><div class="grow"><b>${stageName(i.stage_id)} · ${fmtDate(i.scheduled_at)} ${fmtTime(i.scheduled_at)}</b>
+            <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}</div>
+            ${i.status === 'scheduled' ? `<button class="btn sm" data-score="${i.id}">Scorecard</button>` : ''}</div>`).join('')}</div></div>` : ''}
+          <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
+              ...a.emails.map(m => ({ t: m.sent_at, txt: `${m.status === 'failed' ? 'Email NOT sent' : 'Email sent'}: ${mailName(m.template_key)}${m.template_key === 'interviewer_notice' && m.to_email ? ' (' + m.to_email + ')' : ''}` }))].sort((p, q) => q.t.localeCompare(p.t))
+              .map(x => `<div class="tl"><i></i><div><div>${esc(x.txt)}</div><div class="small muted">${new Date(x.t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div></div></div>`).join('')}</div></div>
+        </div>`;
+      if (!canAct) return;
+      $('#mv', s).onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, () => { render(); state.redraw?.(); }); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); render(); state.redraw?.(); } catch (er) { fail(er); } };
+      $('#sched', s).onclick = () => scheduleFlow(id, STAGE_ROUND[a.stage_id] ? a.stage_id : 3, () => { render(); state.redraw?.(); });
+      $$('[data-resend]', s).forEach(b => b.onclick = async () => { b.disabled = true;
+        try { const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled'); await api.resendEmail(id, b.dataset.resend, iv?.id); toast('Email sent'); render(); }
+        catch (e) { b.disabled = false; fail(e); } });
+      $$('[data-att]', s).forEach(b => b.onclick = async () => { try { const f = a.attachments[+b.dataset.att]; const u = await api.fileUrl(f.path); u ? window.open(u, '_blank', 'noopener') : toast('Files open in the live app.'); } catch (e) { fail(e); } });
+      $('#resume', s).onclick = async () => { try { const u = await api.resumeUrl(a.resumes?.storage_path); u ? window.open(u, '_blank', 'noopener') : toast('Resume files open in the live app (demo has sample data only).'); } catch (e) { fail(e); } };
+      $('#rescr', s) && ($('#rescr', s).onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } });
+      $('#rej', s) && ($('#rej', s).onclick = () => rejectFlow(id, () => { render(); state.redraw?.(); }));
+      $$('[data-score]', s).forEach(b => b.onclick = () => scorecardFlow(b.dataset.score, render));
+    };
+    try { await render(); } catch (e) { fail(e); close(); }
+    let rt; const unsub = api.subscribe(() => { clearTimeout(rt); rt = setTimeout(() => { if (document.body.contains(s)) render().catch(() => {}); }, 300); });
+    const obs = new MutationObserver(() => { if (!document.body.contains(s)) { unsub(); obs.disconnect(); } });
+    obs.observe(document.body, { childList: true });
+  }
+
+  const MAIL_NAMES = { received: 'application received', rejection: 'rejection', offer: 'offer', hired: 'welcome', interview_invite: 'interview confirmation',
+    interviewer_notice: 'interviewer notice', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_5: 'offer', stage_6: 'welcome' };
+  const mailName = k => MAIL_NAMES[k] || String(k).replace(/_/g, ' ');
+
+  function rejectFlow(id, after) {
+    const m = modal('Reject candidate', `<p class="muted" style="margin:0">The candidate moves to Rejected. The reason is saved in their history, shared in the Slack alert and included in the rejection email, so write it the way you would say it to the candidate.</p>
+      <div class="field"><label for="rr">Reason type</label><select class="input" id="rr"><option value="">Choose a reason…</option><option>Does not meet a must-have</option><option>Not enough relevant experience</option><option>Another candidate was a better fit</option><option>Did not pass the interview</option><option>Salary expectations do not match</option><option>Candidate withdrew</option><option>Other</option></select></div>
+      <div class="field"><label for="rd">Reason for rejection <span style="color:var(--disq)">*</span></label><textarea class="input" id="rd" rows="3" maxlength="1000" placeholder="Explain why this candidate is being rejected"></textarea></div>
+      <div id="rerr" class="small" style="color:var(--disq)" role="alert"></div>
+      <label class="row" style="gap:8px"><input type="checkbox" id="rn" checked> Send the rejection email to the candidate</label>`,
+      `<button class="btn" data-close>Cancel</button><button class="btn danger solid" id="go">Reject</button>`);
+    $('#rr', m.el).focus();
+    $('#go', m.el).onclick = async () => { const go = $('#go', m.el), err = $('#rerr', m.el);
+      const type = $('#rr', m.el).value, detail = $('#rd', m.el).value.trim();
+      if (!type) { err.textContent = 'Please choose a reason type.'; return $('#rr', m.el).focus(); }
+      if (detail.length < 5) { err.textContent = 'Please write the reason for rejection (at least 5 characters).'; return $('#rd', m.el).focus(); }
+      err.textContent = ''; go.disabled = true;
+      try { const res = await api.reject(id, `${type}: ${detail}`, $('#rn', m.el).checked) || {}; m.close();
+        res.warning ? toast(`Candidate rejected, but the email was not sent. ${res.warning}`, true) : toast(res.emailed ? 'Candidate rejected and email sent' : 'Candidate rejected'); after?.(); }
+      catch (e) { go.disabled = false; fail(e); } };
+  }
+
+  async function scheduleFlow(id, stage, after) {
+    const [team, a] = await Promise.all([api.team(), api.application(id)]);
+    const job = (state.jobs.find(j => j.id === a.job_id)) || (await api.job(a.job_id));
+    const rounds = job.rounds || [];
+    const active = team.filter(t => t.active !== false);
+    if (!active.length) return toast('Add interviewers in Settings → Interview panel first.', true);
+    let rno = STAGE_ROUND[stage] || 1;
+    const d = new Date(Date.now() + 864e5); d.setHours(11, 0, 0, 0);
+    const local = new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+    const m = modal('Schedule interview', `
+      <p class="small muted" style="margin:0">Use this when you have already agreed a time with the candidate. Otherwise just move them to the round: they get an email to book a time themselves.</p>
+      <div class="grid2"><div class="field"><label for="ss">Round</label><select class="input" id="ss">${[1, 2, 3].map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+        <div class="field"><label for="sd">Length</label><select class="input" id="sd">${[15, 30, 45, 60, 90].map(x => `<option value="${x}">${x} min</option>`).join('')}</select></div></div>
+      <div class="field"><label for="st">Date and time (your computer's time zone)</label><input class="input" type="datetime-local" id="st" value="${local}"></div>
+      <div class="field"><label for="si">Interviewer</label><select class="input" id="si">${active.map(t => `<option value="${t.id}">${esc(t.full_name)}${t.title ? ' · ' + esc(t.title) : ''}</option>`).join('')}</select></div>
+      <div class="field"><span class="lbl" style="font-size:12.5px;font-weight:600">Also attending (optional)</span><div class="iv-picks" id="sco">${active.map(t => `<label class="iv-pick"><input type="checkbox" data-co="${t.id}">${esc(t.full_name)}</label>`).join('')}</div></div>
+      <div class="field"><label for="sl">Meeting link</label><input class="input" id="sl" placeholder="https://meet.google.com/… or Zoom link"><div class="small" id="slh" style="color:var(--review)"></div></div>
+      <p class="small muted" style="margin:0">A confirmation email with a calendar invite goes to the candidate and everyone attending.</p>`,
+      `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Schedule and send invite</button>`);
+    const fill = () => { const rd = rounds[rno - 1] || {};
+      if (rd.interviewer_id && active.some(t => t.id === rd.interviewer_id)) $('#si', m.el).value = rd.interviewer_id;
+      const rids = Array.isArray(rd.interviewer_ids) && rd.interviewer_ids.length ? rd.interviewer_ids : (rd.interviewer_id ? [rd.interviewer_id] : []);
+      if (rids[0] && active.some(t => t.id === rids[0])) $('#si', m.el).value = rids[0];
+      $$('[data-co]', m.el).forEach(c => { c.checked = rids.slice(1).includes(c.dataset.co); c.closest('.iv-pick').classList.toggle('on', c.checked); });
+      syncCo();
+      $('#sd', m.el).value = String(rd.duration || 30);
+      const t = active.find(x => x.id === $('#si', m.el).value); $('#sl', m.el).value = t?.meeting_link || ''; slHint(t); };
+    fill();
+    function syncCo() { const lead = $('#si', m.el).value; $$('[data-co]', m.el).forEach(c => { const me = c.dataset.co === lead; c.disabled = me; if (me) c.checked = false; c.closest('.iv-pick').hidden = me; c.closest('.iv-pick').classList.toggle('on', c.checked); }); }
+    $$('[data-co]', m.el).forEach(c => c.onchange = () => c.closest('.iv-pick').classList.toggle('on', c.checked));
+    function slHint(t) { $('#slh', m.el).textContent = !t || t.meeting_link ? '' : `${t.full_name} has no meeting link saved${t.booking_url ? ' (only a booking page, which candidates use to pick a time, not to join the call)' : ''}. Paste a Google Meet or Zoom link here, or add one in Settings → Interview panel.`; }
+    $('#ss', m.el).onchange = e => { rno = +e.target.value; fill(); };
+    $('#si', m.el).onchange = () => { const t = active.find(x => x.id === $('#si', m.el).value); $('#sl', m.el).value = t?.meeting_link || ''; slHint(t); syncCo(); };
+    $('#go', m.el).onclick = async () => {
+      const when = new Date($('#st', m.el).value);
+      if (isNaN(when)) return toast('Choose a date and time.', true);
+      const go = $('#go', m.el); go.disabled = true;
+      try { const row = await api.schedule({ application_id: id, stage_id: ROUND_STAGE[rno], round_no: rno, team_member_id: $('#si', m.el).value, co_interviewer_ids: $$('[data-co]:checked', m.el).map(c => c.dataset.co).filter(x => x !== $('#si', m.el).value),
+          scheduled_at: when.toISOString(), duration_min: +$('#sd', m.el).value, meeting_link: $('#sl', m.el).value.trim() || null,
+          candidate_tz: Intl.DateTimeFormat().resolvedOptions().timeZone }, a.stage_id);
+        m.close(); toast(row.warning ? `Interview saved. ${row.warning}` : 'Interview scheduled and invite sent', !!row.warning); after?.(); }
+      catch (e) { go.disabled = false; fail(e); } };
+  }
+
+  function scorecardFlow(ivid, after) {
+    let rating = 0;
+    const m = modal('Interview scorecard', `
+      <div class="field"><label>Overall rating</label><div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>
+      <div class="field"><label for="rec">Recommendation</label><div class="seg" id="rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label for="fb">Feedback</label><textarea class="input" id="fb" placeholder="Strengths, concerns, and anything the next interviewer should probe."></textarea></div>`,
+      `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Submit scorecard</button>`);
+    let rec = null;
+    $$('[data-n]', m.el).forEach(b => b.onclick = () => { rating = +b.dataset.n; $$('[data-n]', m.el).forEach(x => x.classList.toggle('on', +x.dataset.n <= rating)); });
+    $$('[data-r]', m.el).forEach(b => b.onclick = () => { rec = b.dataset.r; $$('[data-r]', m.el).forEach(x => x.classList.toggle('on', x === b)); });
+    $('#go', m.el).onclick = async () => {
+      if (!rating || !rec) return toast('Add a rating and a recommendation.', true);
+      try { await api.scorecard(ivid, { rating, recommendation: rec, feedback: $('#fb', m.el).value.trim() }); m.close(); toast('Scorecard submitted'); after?.(); } catch (e) { fail(e); } };
+  }
+
+  /* ───────── upload ───────── */
+  let libsLoaded = false;
+  const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.append(s); });
+  async function extractText(file) {
+    if (api.mode === 'demo') return '';
+    if (!libsLoaded) {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      libsLoaded = true;
+    }
+    const buf = await file.arrayBuffer();
+    if (/\.pdf$/i.test(file.name)) {
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise; let t = '';
+      for (let i = 1; i <= pdf.numPages; i++) t += (await (await pdf.getPage(i)).getTextContent()).items.map(x => x.str).join(' ') + '\n';
+      return t;
+    }
+    return (await mammoth.extractRawText({ arrayBuffer: buf })).value;
+  }
+  window.ATS.extractText = extractText;
+
+  async function upload(el, jobId) {
+    const jobs = (state.jobs = await api.jobs()).filter(j => j.status !== 'closed');
+    jobId = jobId || jobs.find(j => j.status === 'open')?.id || jobs[0]?.id;
+    el.innerHTML = `<div class="page-head"><div><h1>Add candidates</h1><p>Drop resumes and the AI screens each one against the job's rules, usually within a minute.</p></div></div>
+      <div class="card card-b" style="display:grid;gap:16px">
+        <div class="field" style="max-width:420px"><label for="uj">Job</label><select class="input" id="uj">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}${j.rules === null ? ' (no rules yet)' : ''}</option>`).join('')}</select></div>
+        <label class="drop-zone" id="dz" tabindex="0">${icon('upload', 40)}<b style="font-size:16px">Drop PDF or DOCX resumes here</b><span class="muted small">or click to choose files · up to 5 MB each · many at once</span>
+          <input type="file" id="uf" accept=".pdf,.docx" multiple hidden></label>
+      </div>
+      <div class="card" id="uplist" hidden><div class="card-h"><h3>Uploads</h3><a class="btn sm" id="topipe" href="#/pipeline">View in pipeline →</a></div><div id="uprows"></div></div>`;
+    const dz = $('#dz'), inp = $('#uf');
+    $('#uj').onchange = e => { jobId = e.target.value; $('#topipe').href = `#/pipeline/${jobId}`; };
+    $('#topipe').href = `#/pipeline/${jobId}`;
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); };
+    dz.ondragleave = () => dz.classList.remove('over');
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove('over'); handle([...e.dataTransfer.files]); };
+    dz.onkeydown = e => (e.key === 'Enter' || e.key === ' ') && inp.click();
+    inp.onchange = () => handle([...inp.files]);
+    async function handle(files) {
+      if (!jobId) return toast('Create a job first.', true);
+      $('#uplist').hidden = false;
+      for (const f of files) {
+        const row = document.createElement('div'); row.className = 'up-row';
+        row.innerHTML = `<div class="row" style="flex-wrap:nowrap">${icon('file')}<b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</b></div><div class="prog"><i style="width:10%"></i></div><span class="small muted">Reading…</span>`;
+        $('#uprows').prepend(row);
+        const set = (w, t, cls) => { $('i', row).style.width = w + '%'; const s = $('span.small', row); s.textContent = t; if (cls) s.className = 'small ' + cls; };
+        if (!/\.(pdf|docx)$/i.test(f.name)) { set(100, 'Only PDF or DOCX', ''); $('span.small', row).style.color = 'var(--disq)'; continue; }
+        if (f.size > 5 * 1048576) { set(100, 'Over 5 MB', ''); $('span.small', row).style.color = 'var(--disq)'; continue; }
+        try { const text = await extractText(f); set(45, 'Uploading…');
+          await api.upload(jobId, f, text); set(100, 'Sent to AI screening'); $('span.small', row).style.color = 'var(--pass)'; }
+        catch (e) { set(100, 'Failed'); $('span.small', row).style.color = 'var(--disq)'; fail(e); }
+      }
+    }
+  }
+
+  /* ───────── interviews ───────── */
+  async function interviews(el, _a, params) {
+    const all = await api.interviews();
+    const mine = state.me.role === 'interviewer';
+    const myEmail = (state.me.email || '').toLowerCase();
+    const list = mine ? all.filter(i => i.interviewer_id === state.me.id || (i.member?.email || '').toLowerCase() === myEmail) : all;
+    const todayOnly = params?.get('day') === 'today', todayStr = new Date().toDateString();
+    const up = list.filter(i => i.status === 'scheduled' && (!todayOnly || new Date(i.scheduled_at).toDateString() === todayStr));
+    const done = todayOnly ? [] : list.filter(i => i.status !== 'scheduled').reverse();
+    const byDay = {}; up.forEach(i => { const k = new Date(i.scheduled_at).toDateString(); (byDay[k] = byDay[k] || []).push(i); });
+    const label = k => { const d = new Date(k), t = new Date(); t.setHours(0, 0, 0, 0); const diff = Math.round((d - t) / 864e5);
+      return diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff < 0 ? d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }) + ' · overdue' : d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }); };
+    const row = i => `<div class="li" data-app="${i.application_id}" tabindex="0"><span class="time">${fmtTime(i.scheduled_at)}</span>${avatar(i.applications?.candidates?.full_name || '?', 32)}
+      <div class="grow"><b>${esc(i.applications?.candidates?.full_name || i.applications?.resumes?.file_name)}</b><span class="small muted">${esc(i.applications?.jobs?.title)} · ${stageName(i.stage_id)} · ${i.duration_min} min · ${esc(ivWho(i))}</span></div>
+      ${i.meeting_link ? `<a class="btn sm" href="${esc(i.meeting_link)}" target="_blank" rel="noopener" data-stop>Join</a>` : ''}${i.status === 'scheduled' ? `<button class="btn sm primary" data-score="${i.id}">Scorecard</button>` : `<span class="small">${'★'.repeat(i.rating || 0)}</span>`}</div>`;
+    el.innerHTML = `<div class="page-head"><div><h1>${mine ? 'My interviews' : 'Interviews'}</h1><p>${up.length} ${todayOnly ? 'today' : 'upcoming'} · candidates book their own times from the email link · reminders go out at 08:00 IST the day before</p></div></div>
+      ${todayOnly ? filterBar(`today's interviews (${up.length})`, '#/interviews') : ''}
+      <div class="card">${Object.keys(byDay).map(k => `<div class="day-h">${label(k)}</div>${byDay[k].map(row).join('')}`).join('') || `<div class="empty">${todayOnly ? 'No interviews scheduled for today.' : 'No upcoming interviews.'}</div>`}</div>
+      ${done.length ? `<div class="card"><div class="card-h"><h3>Completed</h3></div>${done.map(row).join('')}</div>` : ''}`;
+    $$('[data-score]', el).forEach(b => b.onclick = e => { e.stopPropagation(); scorecardFlow(b.dataset.score, () => route()); });
+    $$('[data-stop]', el).forEach(b => b.onclick = e => e.stopPropagation());
+    if (!mine) bindApps(el);
+  }
+
+  /* ───────── settings ───────── */
+  const BASE_PH = ['candidate_name', 'job_title'];
+  const ROUND_PH = [...BASE_PH, 'round_name', 'round_number', 'interviewer_name', 'duration', 'booking_link'];
+  const TEMPLATE_INFO = {
+    received: { title: 'Applied', when: 'Sent when a candidate applies on the careers site or you upload their resume.', ph: BASE_PH },
+    screened: { title: 'Screened', when: 'Sent when a candidate moves to Screened. Off by default: the AI moves every new applicant to Screened, so switching this on emails everyone once they are scored.', ph: BASE_PH },
+    round_1: { title: 'Round 1', when: "Sent when a candidate is moved to Round 1. Includes the link to book a time with Round 1's interviewer (set on each job under Panel and rounds).", ph: ROUND_PH, need: 'booking_link' },
+    round_2: { title: 'Round 2', when: "Sent when a candidate is moved to Round 2, with the booking link for Round 2's interviewer.", ph: ROUND_PH, need: 'booking_link' },
+    round_3: { title: 'Round 3', when: "Sent when a candidate is moved to Round 3, with the booking link for Round 3's interviewer.", ph: ROUND_PH, need: 'booking_link' },
+    offer: { title: 'Offer', when: 'Sent when a candidate is moved to Offer.', ph: BASE_PH },
+    hired: { title: 'Hired', when: 'Sent when a candidate is moved to Hired.', ph: BASE_PH },
+    rejection: { title: 'Rejected', when: 'Sent when you reject a candidate with "Send the rejection email" ticked. {{rejection_reason}} is the reason entered in the reject pop-up.', ph: [...BASE_PH, 'rejection_reason'] },
+    interview_invite: { title: 'Interview confirmed', when: 'Sent to the candidate after they book a time (or you schedule the interview), with the calendar invite attached.', ph: [...BASE_PH, 'round_name', 'interviewer_name', 'interview_time', 'duration', 'meeting_link'] }
+  };
+  const SAMPLE = { candidate_name: 'Priya', job_title: 'Sales Development Representative', round_name: 'Intro call', round_number: '1', interviewer_name: 'Jay Khunt',
+    duration: '30', booking_link: 'https://careers.dollarrevenuegroup.com/book/…', interview_time: 'Tuesday 3 November 2026, 11:00 AM (India Standard Time)', meeting_link: 'https://meet.google.com/abc-defg-hij',
+    rejection_reason: 'Not enough relevant experience: we need at least 1 year of hands-on Clay work for this role.' };
+  const fillSample = s => String(s || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => SAMPLE[k] ?? '');
+  async function templateSettings(sb) {
+    const ts = (await api.templates()).filter(t => t.key !== 'round_invite');
+    const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    ts.sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
+    sb.innerHTML = `<div class="card card-b small muted" style="margin-bottom:14px">Each pipeline stage has its own email. It goes out automatically, from the hiring mailbox, when a candidate enters that stage. Click a placeholder to insert it; it is filled in for each candidate. Switch a stage off to stop its email.</div>
+      <div style="display:grid;gap:14px">${ts.map(t => { const info = TEMPLATE_INFO[t.key] || { title: t.label || t.key, when: '', ph: BASE_PH }; const on = t.enabled !== false;
+        return `<div class="card tpl ${on ? '' : 'off'}" data-tpl="${t.key}"><div class="card-h"><div><div class="eyebrow">${info.title === 'Interview confirmed' ? 'After booking' : 'Stage'}</div><h3>${esc(info.title)}</h3><div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div>
+          <label class="switch" title="${on ? 'Sending automatically' : 'Switched off'}"><input type="checkbox" data-on="${t.key}" ${on ? 'checked' : ''}><span></span><b class="small">${on ? 'On' : 'Off'}</b></label></div>
+          <div class="card-b" style="display:grid;gap:10px">
+            <div class="field"><label for="ts-${t.key}">Subject</label><input class="input" id="ts-${t.key}" data-subj="${t.key}" value="${esc(t.subject)}"></div>
+            <div class="field"><label for="tb-${t.key}">Message</label><textarea class="input" rows="9" id="tb-${t.key}" data-body="${t.key}">${esc(t.body)}</textarea></div>
+            <div class="row" style="gap:6px"><span class="small muted">Insert:</span>${info.ph.map(p => `<button type="button" class="tag ph" data-ph="${p}" data-for="${t.key}">{{${p}}}</button>`).join('')}</div>
+            <div class="row" style="justify-content:space-between"><button type="button" class="btn sm ghost" data-prev="${t.key}">Preview</button><button class="btn sm primary" data-save="${t.key}">Save</button></div>
+            <div class="preview" data-preview="${t.key}" hidden></div></div></div>`; }).join('')}</div>`;
+    let lastField = {};
+    $$('[data-subj],[data-body]', sb).forEach(f => f.onfocus = () => { lastField[f.dataset.subj || f.dataset.body] = f; });
+    $$('[data-ph]', sb).forEach(b => b.onclick = () => {
+      const k = b.dataset.for, f = lastField[k] || $(`[data-body="${k}"]`, sb), ins = `{{${b.dataset.ph}}}`;
+      const st = f.selectionStart ?? f.value.length, en = f.selectionEnd ?? f.value.length;
+      f.value = f.value.slice(0, st) + ins + f.value.slice(en); f.focus(); f.selectionStart = f.selectionEnd = st + ins.length; });
+    $$('[data-prev]', sb).forEach(b => b.onclick = () => { const k = b.dataset.prev, box = $(`[data-preview="${k}"]`, sb);
+      box.hidden = !box.hidden; b.textContent = box.hidden ? 'Preview' : 'Hide preview';
+      box.innerHTML = `<div class="small muted">Example with sample details</div><b>${esc(fillSample($(`[data-subj="${k}"]`, sb).value))}</b><div style="white-space:pre-wrap;margin-top:8px">${esc(fillSample($(`[data-body="${k}"]`, sb).value))}</div>`; });
+    $$('[data-save]', sb).forEach(b => b.onclick = async () => { const k = b.dataset.save, info = TEMPLATE_INFO[k] || {};
+      const subj = $(`[data-subj="${k}"]`, sb).value.trim(), body = $(`[data-body="${k}"]`, sb).value.trim();
+      if (!subj || !body) return toast('Add a subject and a message.', true);
+      if (info.need && !body.includes(`{{${info.need}}}`)) return toast(`Keep {{${info.need}}} in the message, or candidates cannot book their interview.`, true);
+      b.disabled = true; try { await api.saveTemplate(k, subj, body); toast(`${info.title || k} email saved`); } catch (e) { fail(e); } finally { b.disabled = false; } });
+    $$('[data-on]', sb).forEach(c => c.onchange = async () => { const k = c.dataset.on, card = c.closest('.tpl');
+      try { await api.saveTemplate(k, null, null, c.checked); card.classList.toggle('off', !c.checked); $('b', c.parentElement).textContent = c.checked ? 'On' : 'Off';
+        toast(`${(TEMPLATE_INFO[k] || {}).title || k} email ${c.checked ? 'switched on' : 'switched off'}`); } catch (e) { c.checked = !c.checked; fail(e); } });
+  }
+  const DAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [7, 'Sun']];
+  async function panelSettings(sb) {
+    const team = await api.team();
+    sb.innerHTML = `<div class="card"><div class="card-h"><div><h3>Interview panel</h3><div class="small muted">People who interview candidates. They do not need a login. Candidates book a time from their weekly hours, and invites use their meeting link.</div></div>
+        <button class="btn primary sm" id="addm">${icon('plus', 14)}Add person</button></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Time zone</th><th>Weekly hours</th><th>Meeting link</th><th>Status</th><th></th></tr></thead><tbody>
+      ${team.map(t => { const av = t.availability || {}; const days = Object.keys(av.days || {}).filter(k => (av.days[k] || []).length).sort();
+        return `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(t.full_name, 30)}<div><b>${esc(t.full_name)}</b><div class="small muted">${esc(t.title || '')}${t.title ? ' · ' : ''}${esc(t.email)}</div></div></div></td>
+        <td class="small">${esc(t.timezone)}</td><td class="small">${days.map(k => DAYS.find(d => d[0] === +k)?.[1]).join(', ') || '—'} ${days.length ? esc((av.days[days[0]][0] || []).join('–')) : ''}</td>
+        <td class="small">${t.meeting_link ? `<a href="${esc(t.meeting_link)}" target="_blank" rel="noopener">Link ↗</a>` : '<span style="color:var(--review)">Missing</span>'}${t.booking_url ? '<div class="muted">+ own booking page</div>' : ''}</td>
+        <td>${t.active === false ? '<span class="chip">Inactive</span>' : '<span class="chip v-pass">Active</span>'}</td><td><button class="btn sm" data-em="${t.id}">Edit</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">No one yet. Add the people who run interviews.</td></tr>'}
+      </tbody></table></div></div>`;
+    $('#addm', sb).onclick = () => memberForm(null, () => panelSettings(sb));
+    $$('[data-em]', sb).forEach(b => b.onclick = () => memberForm(team.find(t => t.id === b.dataset.em), () => panelSettings(sb)));
+  }
+  function memberForm(t, after) {
+    const av = t?.availability || { slot: 30, days: { 1: [['10:00', '18:00']], 2: [['10:00', '18:00']], 3: [['10:00', '18:00']], 4: [['10:00', '18:00']], 5: [['10:00', '18:00']] } };
+    const on = Object.keys(av.days || {}).filter(k => (av.days[k] || []).length).map(Number);
+    const first = (av.days[on[0]] || [['10:00', '18:00']])[0];
+    const tzs = [...new Set([t?.timezone || 'Asia/Kolkata', ...TZS])];
+    const m = modal(t ? 'Edit interviewer' : 'Add interviewer', `
+      <div class="grid2"><div class="field"><label for="mn">Full name</label><input class="input" id="mn" value="${esc(t?.full_name)}"></div>
+        <div class="field"><label for="me">Email</label><input class="input" id="me" type="email" value="${esc(t?.email)}"></div></div>
+      <div class="grid2"><div class="field"><label for="mt">Job title</label><input class="input" id="mt" value="${esc(t?.title)}" placeholder="e.g. Head of Sales"></div>
+        <div class="field"><label for="mz">Time zone</label><select class="input" id="mz">${tzs.map(z => `<option ${z === (t?.timezone || 'Asia/Kolkata') ? 'selected' : ''}>${z}</option>`).join('')}</select></div></div>
+      <div class="field"><label>Days available for interviews</label><div class="seg" id="md">${DAYS.map(([k, l]) => `<button type="button" data-d="${k}" class="${on.includes(k) ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div class="grid2"><div class="field"><label for="mf">From</label><input class="input" type="time" id="mf" value="${first[0]}"></div><div class="field"><label for="mu">Until</label><input class="input" type="time" id="mu" value="${first[1]}"></div></div>
+      <div class="field"><label for="ms">Offer start times every</label><select class="input" id="ms">${[15, 30, 60].map(x => `<option value="${x}" ${+av.slot === x ? 'selected' : ''}>${x} minutes</option>`).join('')}</select></div>
+      <div class="field"><label for="ml">Meeting link (Google Meet, Zoom, Teams)</label><input class="input" id="ml" value="${esc(t?.meeting_link)}" placeholder="Their personal meeting room link"></div>
+      <div class="field"><label for="mb">Own booking page (optional)</label><input class="input" id="mb" value="${esc(t?.booking_url)}" placeholder="e.g. a Calendly link. If set, candidates book there instead."></div>
+      ${t ? `<label class="row small" style="gap:8px"><input type="checkbox" id="ma" ${t.active !== false ? 'checked' : ''}> Active (can be chosen for interviews)</label>` : ''}`,
+      `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">${t ? 'Save' : 'Add person'}</button>`);
+    $$('[data-d]', m.el).forEach(b => b.onclick = () => b.classList.toggle('on'));
+    $('#go', m.el).onclick = async () => {
+      const name = $('#mn', m.el).value.trim(), email = $('#me', m.el).value.trim().toLowerCase();
+      if (!name || !/^\S+@\S+\.\S+$/.test(email)) return toast('Add a name and a valid email.', true);
+      const from = $('#mf', m.el).value, until = $('#mu', m.el).value;
+      if (!from || !until || from >= until) return toast('The end time must be after the start time.', true);
+      const days = {}; $$('[data-d].on', m.el).forEach(b => days[b.dataset.d] = [[from, until]]);
+      if (!Object.keys(days).length) return toast('Pick at least one day.', true);
+      const link = $('#ml', m.el).value.trim(), book = $('#mb', m.el).value.trim();
+      if ([link, book].some(u => u && !/^https:\/\//i.test(u))) return toast('Links must start with https://', true);
+      try { await api.saveMember({ ...(t ? { id: t.id } : {}), full_name: name, email, title: $('#mt', m.el).value.trim() || null, timezone: $('#mz', m.el).value,
+          availability: { slot: +$('#ms', m.el).value, days }, meeting_link: link || null, booking_url: book || null, ...(t ? { active: $('#ma', m.el).checked } : {}) });
+        m.close(); toast(t ? 'Saved' : 'Added to the interview panel'); after?.(); } catch (e) { fail(/duplicate/i.test(e.message) ? new Error('Someone with this email is already on the panel.') : e); } };
+  }
+
+  async function settings(el, _a, params) {
+    const tab = params.get('tab') || 'panel';
+    el.innerHTML = `<div class="page-head"><div><h1>Settings</h1><p>Interview panel, team access, candidate emails and automation connections.</p></div></div>
+      <div class="tabs">${[['panel', 'Interview panel'], ['team', 'Logins'], ['emails', 'Email templates'], ['auto', 'Automation']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div><div id="sb"></div>`;
+    $$('[data-t]', el).forEach(b => b.onclick = () => location.hash = `#/settings?tab=${b.dataset.t}`);
+    const sb = $('#sb');
+    if (tab === 'panel') return panelSettings(sb);
+    if (tab === 'team') {
+      const ps = await api.profiles();
+      sb.innerHTML = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Email</th><th>Role</th></tr></thead><tbody>${ps.map(p => `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(p.full_name, 30)}<b>${esc(p.full_name)}</b></div></td><td class="muted">${esc(p.email)}</td>
+        <td><select class="input" data-role="${p.id}" style="width:auto" ${p.id === state.me.id ? 'disabled' : ''} aria-label="Role">${['admin', 'recruiter', 'hiring_manager', 'interviewer'].map(r => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${r.replace('_', ' ')}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>
+        <p class="small muted">To add someone, invite them from Supabase → Authentication → Users. They appear here after their first sign-in, as a recruiter by default.</p>`;
+      $$('[data-role]', sb).forEach(s => s.onchange = async () => { try { await api.setRole(s.dataset.role, s.value); toast('Role updated'); } catch (e) { fail(e); } });
+    } else if (tab === 'emails') {
+      await templateSettings(sb);
+    } else {
+      const st = await api.settings(); const cfg = window.ATS_CONFIG || {};
+      const okc = v => v ? '<span class="chip v-pass">Connected</span>' : '<span class="chip v-review">Not set</span>';
+      sb.innerHTML = `<div class="card"><div class="card-h"><h3>n8n connections</h3></div><div class="card-b" style="display:grid;gap:14px">
+        ${st.map(s => `<div class="field"><label for="set-${s.key}">${esc(s.description || s.key)}</label><div class="row" style="flex-wrap:nowrap"><input class="input" id="set-${s.key}" data-set="${s.key}" value="${esc(s.value || '')}" ${s.key === 'n8n_webhook_secret' ? 'type="password"' : ''}><button class="btn sm" data-ss="${s.key}">Save</button></div></div>`).join('')}
+        <div class="small muted">The database calls n8n the instant an application is saved or a candidate changes stage; it sends the secret in the <span class="mono">x-ats-secret</span> header. Paste the Slack incoming-webhook URL above to get a message for every careers-site application.</div></div></div>
+        <div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Web app setting (config.js)</th><th>Status</th></tr></thead><tbody>
+          <tr><td>Supabase project</td><td>${okc(cfg.SUPABASE_URL)}</td></tr><tr><td>Workflow 4 · Email request webhook</td><td>${okc(cfg.N8N_SEND_EMAIL_URL)}</td></tr><tr><td>Workflow 3 · Careers apply webhook</td><td>${okc(cfg.N8N_APPLY_URL)}</td></tr><tr><td>Workflow 11 · Interview booking</td><td>${okc(cfg.N8N_BOOK_URL)}</td></tr><tr><td>Careers site</td><td>${cfg.CAREERS_URL ? `<a href="${esc(cfg.CAREERS_URL)}" target="_blank" rel="noopener">${esc(cfg.CAREERS_URL)}</a>` : okc(0)}</td></tr></tbody></table></div>`;
+      $$('[data-ss]', sb).forEach(b => b.onclick = async () => { try { await api.saveSetting(b.dataset.ss, $(`[data-set="${b.dataset.ss}"]`, sb).value.trim() || null); toast('Saved'); } catch (e) { fail(e); } });
+    }
+  }
+
+  /* ───────── login ───────── */
+  function login() {
+    app.innerHTML = `<div class="login"><div class="login-art"><div class="brand"><div class="brand-mark">${LOGO}</div><div><div class="brand-name">DRG ATS</div><div class="brand-sub">Applicant tracking</div></div></div>
+      <div><h1>Every resume read. Every decision yours.</h1><p>AI screens each applicant against your rules within a minute and shows its evidence. Your team decides who moves forward.</p></div>
+      <div style="display:grid;gap:14px"><div class="feature"><i>1</i><div><b>Set the bar per role</b>Must-haves and weighted criteria for every job.</div></div>
+        <div class="feature"><i>2</i><div><b>Screen in seconds</b>Scores, verdicts and quoted evidence on every resume.</div></div>
+        <div class="feature"><i>3</i><div><b>Run the whole pipeline</b>Interviews, scorecards and emails in one place.</div></div></div></div>
+      <div class="login-form"><form class="card" id="lf"><div><h2>Sign in</h2><p class="muted small" style="margin:6px 0 0">Use the email your admin invited.</p></div>
+        <div class="field"><label for="le">Work email</label><input class="input" id="le" type="email" required autocomplete="email"></div>
+        <div class="field"><label for="lp">Password</label><input class="input" id="lp" type="password" autocomplete="current-password"></div>
+        <button class="btn primary" style="justify-content:center">Sign in</button>
+        <button type="button" class="btn ghost" id="ml" style="justify-content:center">Email me a sign-in link instead</button>
+        <div id="lmsg" class="small muted" role="status"></div></form></div></div>`;
+    $('#lf').onsubmit = async e => { e.preventDefault();
+      try { await api.signIn($('#le').value.trim(), $('#lp').value); boot(); } catch (er) { $('#lmsg').textContent = er.message; $('#lmsg').style.color = 'var(--disq)'; } };
+    $('#ml').onclick = async () => { const em = $('#le').value.trim(); if (!em) return $('#le').focus();
+      try { await api.magicLink(em); $('#lmsg').textContent = 'Check your inbox for the sign-in link.'; $('#lmsg').style.color = 'var(--pass)'; } catch (er) { $('#lmsg').textContent = er.message; } };
+  }
+
+  /* ───────── boot ───────── */
+  let timer;
+  async function boot() {
+    try {
+      const s = await api.session();
+      if (!s) return login();
+      state.me = await api.me();
+      if (!state.me) return login();
+      shell(); await route();
+      state.unsub?.();
+      state.unsub = api.subscribe(() => { clearTimeout(timer); timer = setTimeout(() => {
+        if (state.route === 'pipeline') state.redraw?.(); else if (['dashboard', 'candidates'].includes(state.route)) route(); refreshBadge(); }, 400); });
+    } catch (e) { fail(e); login(); }
+  }
+  window.addEventListener('hashchange', () => { state.redraw = null; route(); });
+  api.onAuth(s => { if (s && !state.me) boot(); });
+  boot();
+})();
