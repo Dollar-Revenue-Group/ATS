@@ -420,3 +420,9 @@ details.card[open]>summary h3::before{content:'▾ '}
 .link-menu svg{flex:none;color:var(--muted)}
 .col-copy{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;padding:0}
 .col-copy:hover{color:var(--accent-strong);border-color:var(--accent)}
+.booked-tag{align-items:flex-start;padding:7px 9px;border-radius:8px;background:rgba(59,130,246,.10);font-weight:500}
+.booked-tag b{font-weight:700}
+.booked-tag svg{margin-top:1px}
+.booked-tag.past{background:var(--surface-2);color:var(--muted)}
+.booked-tag b{display:block}
+.kcard .booked-tag b{white-space:normal;font-size:12px}
