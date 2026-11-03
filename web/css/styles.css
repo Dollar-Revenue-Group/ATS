@@ -711,3 +711,20 @@ body.cp-mode .cp-pane{top:12px;height:calc(100vh - 24px)}
 .cp-split:hover i,.cp-split:focus-visible i,body.cp-dragging .cp-split i{background:var(--accent);height:96px}
 body.cp-dragging{cursor:col-resize;user-select:none}
 body.cp-dragging iframe{pointer-events:none}
+
+/* ── resume viewer with hand tool ── */
+.pv{display:flex;flex-direction:column;height:100%;min-height:0}
+.pv-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--surface)}
+.pv-b{display:inline-flex;align-items:center;gap:6px;height:30px;min-width:30px;justify-content:center;padding:0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:inherit;font-weight:600;font-size:13px;cursor:pointer}
+.pv-b:hover{border-color:var(--accent)}
+.pv-b.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
+.pv-z{min-width:48px;text-align:center;font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.pv-sep{width:1px;height:20px;background:var(--line)}
+.pv-bar .grow{flex:1}
+.pv-scroll{flex:1;min-height:0;overflow:auto;background:#525659;outline:none;overscroll-behavior:contain}
+.pv-scroll.pan{cursor:grab}.pv-scroll.pan.grabbing{cursor:grabbing}
+.pv-scroll.pan .pv-page{user-select:none;-webkit-user-drag:none}
+.pv-pages{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px;width:max-content;min-width:100%;box-sizing:border-box}
+.pv-page{display:block;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35);border-radius:2px}
+.cp-resume .cp-pane-b{overflow:hidden;display:flex;flex-direction:column}
+.cp-resume .cp-pane-b>.cp-text,.cp-resume .cp-pane-b>.empty,.cp-resume .cp-pane-b>.viewer-img{overflow:auto}

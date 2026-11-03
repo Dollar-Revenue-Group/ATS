@@ -958,6 +958,69 @@
   }
 
   /* ───────── candidate full page: resume | details | interview scoring ───────── */
+  // Resume viewer with a hand (pan) tool: drag to move around, zoom with the buttons or Ctrl + scroll
+  let pdfLibReady = null;
+  function loadPdfLib() {
+    if (window.pdfjsLib) { pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsLib.GlobalWorkerOptions.workerSrc || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; return Promise.resolve(); }
+    return pdfLibReady = pdfLibReady || loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js')
+      .then(() => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; })
+      .catch(e => { pdfLibReady = null; throw e; });
+  }
+  async function pdfViewer(host, buf, name) {
+    await loadPdfLib();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pref = () => { try { return localStorage.getItem('ats.pdf.zoom'); } catch (e) { return null; } };
+    let zoom = pref() === 'fit' || !pref() ? 'fit' : Math.max(0.5, Math.min(3, +pref() || 1)), pan = true, rendering = 0;
+    host.innerHTML = `<div class="pv">
+      <div class="pv-bar" role="toolbar" aria-label="Resume tools">
+        <button type="button" class="pv-b on" data-pv="pan" title="Hand tool: drag to move around the page" aria-pressed="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/></svg>Pan</button>
+        <span class="pv-sep"></span>
+        <button type="button" class="pv-b" data-pv="out" title="Zoom out" aria-label="Zoom out">−</button>
+        <span class="pv-z" id="pvz">100%</span>
+        <button type="button" class="pv-b" data-pv="in" title="Zoom in" aria-label="Zoom in">+</button>
+        <button type="button" class="pv-b" data-pv="fit" title="Fit the page width to the panel">Fit width</button>
+        <span class="grow"></span><span class="pv-pg small muted" id="pvpg">${pdf.numPages} page${pdf.numPages > 1 ? 's' : ''}</span>
+      </div>
+      <div class="pv-scroll pan" tabindex="0" aria-label="${esc(name || 'Resume')}"><div class="pv-pages"></div></div></div>`;
+    const sc = $('.pv-scroll', host), pages = $('.pv-pages', host), zl = $('#pvz', host);
+    const first = await pdf.getPage(1); const baseW = first.getViewport({ scale: 1 }).width;
+    const scaleNow = () => zoom === 'fit' ? Math.max(0.3, (sc.clientWidth - 28) / baseW) : zoom;
+    const draw = async () => {
+      const run = ++rendering, s = scaleNow(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const keep = sc.scrollHeight ? { x: sc.scrollLeft / Math.max(1, sc.scrollWidth), y: sc.scrollTop / Math.max(1, sc.scrollHeight) } : null;
+      zl.textContent = Math.round(s * 100) + '%';
+      const frag = document.createDocumentFragment();
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const page = n === 1 ? first : await pdf.getPage(n); if (run !== rendering) return;
+        const vp = page.getViewport({ scale: s * dpr }); const c = document.createElement('canvas');
+        c.width = Math.floor(vp.width); c.height = Math.floor(vp.height); c.style.width = Math.floor(vp.width / dpr) + 'px'; c.style.height = Math.floor(vp.height / dpr) + 'px';
+        c.className = 'pv-page'; await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; if (run !== rendering) return;
+        frag.append(c);
+      }
+      pages.replaceChildren(frag);
+      if (keep) { sc.scrollLeft = keep.x * sc.scrollWidth; sc.scrollTop = keep.y * sc.scrollHeight; }
+    };
+    const setZoom = z => { zoom = z; try { localStorage.setItem('ats.pdf.zoom', String(z)); } catch (e) { /* private mode */ } draw(); };
+    const step = d => setZoom(Math.round(Math.max(0.5, Math.min(3, scaleNow() + d)) * 100) / 100);
+    $$('[data-pv]', host).forEach(b => b.onclick = () => { const k = b.dataset.pv;
+      if (k === 'in') step(0.15); else if (k === 'out') step(-0.15); else if (k === 'fit') setZoom('fit');
+      else if (k === 'pan') { pan = !pan; b.classList.toggle('on', pan); b.setAttribute('aria-pressed', pan); sc.classList.toggle('pan', pan); } });
+    // Drag to pan (mouse, pen or touch)
+    let drag = null;
+    sc.addEventListener('pointerdown', e => { if (!pan || e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, l: sc.scrollLeft, t: sc.scrollTop }; sc.setPointerCapture(e.pointerId); sc.classList.add('grabbing'); e.preventDefault(); });
+    sc.addEventListener('pointermove', e => { if (!drag) return; sc.scrollLeft = drag.l - (e.clientX - drag.x); sc.scrollTop = drag.t - (e.clientY - drag.y); });
+    const end = () => { drag = null; sc.classList.remove('grabbing'); };
+    sc.addEventListener('pointerup', end); sc.addEventListener('pointercancel', end);
+    // Ctrl/Cmd + scroll zooms; plain scroll scrolls
+    sc.addEventListener('wheel', e => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); clearTimeout(sc._zt); const d = e.deltaY < 0 ? 0.1 : -0.1; sc._zt = setTimeout(() => step(d), 40); }, { passive: false });
+    sc.addEventListener('keydown', e => { if (e.key === '+' || e.key === '=') step(0.15); if (e.key === '-') step(-0.15); if (e.key === '0') setZoom('fit'); });
+    // Page counter while scrolling
+    sc.addEventListener('scroll', () => { const cs = $$('.pv-page', pages); if (cs.length < 2) return; const mid = sc.scrollTop + sc.clientHeight / 3;
+      let n = 1; cs.forEach((c, i) => { if (c.offsetTop <= mid) n = i + 1; }); $('#pvpg', host).textContent = `Page ${n} of ${cs.length}`; }, { passive: true });
+    // Re-fit when the panel is resized
+    if (window.ResizeObserver) { let rt, w0 = sc.clientWidth; const ro = new ResizeObserver(() => { if (!document.body.contains(sc)) return ro.disconnect(); if (zoom !== 'fit' || Math.abs(sc.clientWidth - w0) < 8) return; w0 = sc.clientWidth; clearTimeout(rt); rt = setTimeout(draw, 150); }); ro.observe(sc); }
+    await draw();
+  }
   // Shows a file inside `host` (PDF in a frame, images, or the text read from a Word file)
   async function fileInto(host, { path, name, resumeId }, links) {
     const ext = String(name || path || '').split('.').pop().toLowerCase();
@@ -969,7 +1032,10 @@
       if (!url && kind !== 'doc') { host.innerHTML = '<div class="empty">Files open in the live app (the demo has sample data only).</div>'; return null; }
       if (kind === 'pdf') {
         const r = await fetch(url); if (!r.ok) throw new Error('The file could not be loaded.');
-        const blobUrl = URL.createObjectURL(new Blob([await r.blob()], { type: 'application/pdf' }));
+        const blob = await r.blob();
+        // Our own viewer (with the hand tool); the browser's built-in PDF viewer is the fallback
+        try { await pdfViewer(host, await blob.arrayBuffer(), name); return null; } catch (e) { console.warn('PDF viewer fallback:', e); }
+        const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
         host.innerHTML = `<iframe class="cp-frame" title="${esc(name || 'Resume')}" src="${blobUrl}#view=FitH&toolbar=1"></iframe>`; return blobUrl;
       }
       if (kind === 'img') { host.innerHTML = `<div class="viewer-img"><img src="${esc(url)}" alt="${esc(name || '')}"></div>`; return null; }
