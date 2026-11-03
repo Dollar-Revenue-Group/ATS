@@ -68,6 +68,13 @@
         if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not connect Cal.com.');
         return res;
       },
+      async interviewQuestions(appId) { return ok(await sb.from('interview_questions').select('*').eq('application_id', appId).order('created_at', { ascending: false })); },
+      async generateQuestions(appId, round, focus) {
+        const res = await callN8n(cfg.N8N_QUESTIONS_URL, { application_id: appId, round_no: round, focus: focus || '' });
+        if (!res || res.ok === false || !res.set) throw new Error((res && res.message) || 'Could not write interview questions.');
+        return res;
+      },
+      async deleteQuestions(id) { ok(await sb.from('interview_questions').delete().eq('id', id)); },
       async disconnectCal(memberId) {
         const res = await callN8n(cfg.CALCOM_CONNECT_URL, { member_id: memberId, action: 'disconnect' });
         if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not disconnect Cal.com.');
@@ -286,7 +293,7 @@
       review: ['Some outbound work, but mostly inbound follow-up.', 'Mentions targets but gives no figures.', 'Adjacent industry (fintech).', 'Clear, though long.'],
       low_fit: ['Little evidence of outbound prospecting.', 'No targets mentioned.', 'Retail background.', 'Several unclear sections.']
     };
-    const candidates = [], applications = [], screenings = [], resumes = [], activity = [], emails = [], interviews = []; const iscores = [];
+    const candidates = [], applications = [], screenings = [], resumes = [], activity = [], emails = [], interviews = []; const iscores = []; const qsets = [];
     plan.forEach(([jobId, stage, score, verdict], i) => {
       const n = names[i]; const created = now - (20 - i * 0.8) * day;
       const cid = `c${i}`, aid = `a${i}`, rid = `rs${i}`;
@@ -438,6 +445,16 @@
       async scorecard(ivid, d) { Object.assign(interviews.find(i => i.id === ivid), d, { status: 'completed' }); emit(); },
       async profiles() { return people; },
       async team() { return team; },
+      async interviewQuestions(aid) { return qsets.filter(x => x.application_id === aid).sort((p, q) => q.created_at.localeCompare(p.created_at)); },
+      async generateQuestions(aid, round, focus) { await wait(); await wait();
+        const items = [['General', 'Walk me through your current role and what a typical week of outbound looks like.', 'Warms up and checks how they describe their own work.', 'Clear daily activity numbers and the tools they use.', 'Which part of that week do you enjoy most?'],
+          ['Attitude', 'Tell me about a time a prospect pushed back hard. What did you do next?', 'Checks resilience and ownership.', 'Stays calm, gets curious, turns the objection into a next step.', 'What would you do differently now?'],
+          ['Experience with plays', 'Your resume says you booked meetings for US mid-market. Walk me through one outbound play you built end to end.', 'Checks that they can design a play, not just follow one.', 'Target list, trigger, message, channel mix and results with numbers.', 'How did you decide when to stop the play?'],
+          ['Signal detection', 'How do you spot that an account is ready to talk? Give me a recent example.', 'Checks how they read buying signals.', 'Concrete signals (hiring, funding, tech changes) and how fast they acted on them.', 'Which signal turned out to be a false alarm?']]
+          .map(([area, question, why, look_for, follow_up]) => ({ area, question, why, look_for, follow_up }));
+        const set = { id: id('iq'), application_id: aid, round_no: round, focus: focus || null, questions: { intro: 'Find out whether they can build outbound plays and read buying signals, not just run a sequence.', items }, model: 'demo', created_by: people[0].id, created_by_name: people[0].full_name, created_at: new Date().toISOString() };
+        qsets.push(set); return { ok: true, message: items.length + ' questions ready', set }; },
+      async deleteQuestions(qid) { const i = qsets.findIndex(x => x.id === qid); if (i >= 0) qsets.splice(i, 1); },
       async connectCal(mid, key) { const t = team.find(x => x.id === mid); Object.assign(t, { cal_key_id: 'demo', cal_username: 'demo-' + t.full_name.split(' ')[0].toLowerCase(), cal_account: t.cal_account || 'demo', cal_connected_at: iso(Date.now()) }); return { ok: true, message: 'Connected (demo)', webhook: true }; },
       async disconnectCal(mid) { Object.assign(team.find(x => x.id === mid), { cal_key_id: null, cal_account: null, cal_connected_at: null }); return { ok: true, message: 'Disconnected (demo)' }; },
       async createCalLink(jobId, round) { await new Promise(r => setTimeout(r, 400)); return { ok: true, booking_url: `https://cal.com/demo/drg-${jobId}-r${round}-interview`, event_type_id: 1, account: 'demo', message: 'Demo link' }; },

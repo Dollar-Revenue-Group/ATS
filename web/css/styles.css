@@ -702,3 +702,12 @@ body.cp-mode .cp-pane{top:12px;height:calc(100vh - 24px)}
 .kc-open:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
 .kcard{overflow:hidden}
 .kcard>*{min-width:0}
+
+/* ── resizable columns on the candidate page ── */
+.cp-split{display:none}
+.cp-grid.split{gap:0}
+.cp-grid.split .cp-split{display:flex;justify-content:center;align-self:stretch;position:sticky;top:12px;height:calc(100vh - 24px);cursor:col-resize;touch-action:none;outline:none}
+.cp-split i{width:4px;margin:auto 0;height:56px;border-radius:999px;background:var(--line-2);transition:background .12s,height .12s}
+.cp-split:hover i,.cp-split:focus-visible i,body.cp-dragging .cp-split i{background:var(--accent);height:96px}
+body.cp-dragging{cursor:col-resize;user-select:none}
+body.cp-dragging iframe{pointer-events:none}

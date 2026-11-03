@@ -1033,6 +1033,43 @@
     draw();
   }
 
+  // Resizable columns on the candidate page (resume | details | scoring)
+  const SPLIT_DEF = { res: 0.36, sc: 380 }, SPLIT_MIN = { res: 300, sc: 300, mid: 340 };
+  function splitWidths() {
+    let w = {}; try { w = JSON.parse(localStorage.getItem('ats.cp.split') || '{}'); } catch (e) { w = {}; }
+    return { res: +w.res || 0, sc: +w.sc || 0 };
+  }
+  function layoutSplit(el, showRes, showSc) {
+    const grid = $('.cp-grid', el); if (!grid) return;
+    const apply = () => {
+      if (window.innerWidth <= 1250) { grid.style.gridTemplateColumns = ''; grid.classList.remove('split'); return; }
+      const total = grid.clientWidth, gut = 10, w = splitWidths();
+      let res = showRes ? (w.res || Math.round(total * SPLIT_DEF.res)) : 0, sc = showSc ? (w.sc || SPLIT_DEF.sc) : 0;
+      const room = total - (showRes ? gut : 0) - (showSc ? gut : 0) - SPLIT_MIN.mid;
+      if (res + sc > room) { const k = room / (res + sc); res = Math.floor(res * k); sc = Math.floor(sc * k); }
+      res = showRes ? Math.max(SPLIT_MIN.res, res) : 0; sc = showSc ? Math.max(SPLIT_MIN.sc, sc) : 0;
+      grid.classList.add('split');
+      grid.style.gridTemplateColumns = [showRes ? `${res}px ${gut}px` : '', 'minmax(0,1fr)', showSc ? `${gut}px ${sc}px` : ''].filter(Boolean).join(' ');
+    };
+    apply();
+    if (!grid.dataset.rz) { grid.dataset.rz = '1'; const onR = () => { if (!document.body.contains(grid)) return window.removeEventListener('resize', onR); apply(); }; window.addEventListener('resize', onR); }
+    const save = (k, v) => { const w = splitWidths(); w[k] = v; try { localStorage.setItem('ats.cp.split', JSON.stringify(w)); } catch (e) { /* private mode */ } apply(); };
+    $$('.cp-split', grid).forEach(g => {
+      const k = g.dataset.split;
+      const pane = k === 'res' ? $('.cp-resume', grid) : $('.cp-scoring', grid);
+      g.onpointerdown = e => { e.preventDefault(); g.setPointerCapture(e.pointerId); document.body.classList.add('cp-dragging');
+        const x0 = e.clientX, w0 = pane.getBoundingClientRect().width;
+        const move = ev => { const dx = ev.clientX - x0; const nw = Math.round(k === 'res' ? w0 + dx : w0 - dx);
+          const w = splitWidths(); w[k] = nw; try { localStorage.setItem('ats.cp.split', JSON.stringify(w)); } catch (er) { /* ignore */ } apply(); };
+        const up = () => { g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); document.body.classList.remove('cp-dragging'); };
+        g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up); };
+      g.ondblclick = () => save(k, 0);
+      g.onkeydown = e => { const step = e.shiftKey ? 80 : 24, cur = pane.getBoundingClientRect().width;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); save(k, Math.round(k === 'res' ? cur - step : cur + step)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); save(k, Math.round(k === 'res' ? cur + step : cur - step)); } };
+    });
+  }
+
   async function candidatePage(el, id, params) {
     document.body.classList.add('cp-mode');
     const pref = k => { try { return localStorage.getItem('ats.' + k); } catch (e) { return null; } };
@@ -1066,10 +1103,13 @@
         </header>
         <div class="cp-grid ${showResume ? '' : 'no-res'} ${showScore ? '' : 'no-sc'}">
           <section class="cp-pane cp-resume" ${showResume ? '' : 'hidden'} aria-label="Resume"><div class="cp-pane-h"><b>${icon('file', 15)}${esc(a.resumes?.file_name || 'Resume')}</b><span class="row" id="reslinks" style="gap:6px"></span><button class="x" id="xres" aria-label="Hide resume" title="Hide resume">${icon('x', 16)}</button></div><div class="cp-pane-b" id="resbody"></div></section>
+          ${showResume ? '<div class="cp-split" data-split="res" role="separator" aria-orientation="vertical" aria-label="Resize the resume panel" tabindex="0" title="Drag to resize · double-click to reset"><i></i></div>' : ''}
           <section class="cp-main" aria-label="Candidate details"><div id="iqcard"></div>${candidateBody(a, iscores, canAct, 'page')}</section>
+          ${showScore ? '<div class="cp-split" data-split="sc" role="separator" aria-orientation="vertical" aria-label="Resize the scoring panel" tabindex="0" title="Drag to resize · double-click to reset"><i></i></div>' : ''}
           <aside class="cp-pane cp-scoring" ${showScore ? '' : 'hidden'} aria-label="Interview scoring"><div class="cp-pane-h"><b>${icon('check', 15)}Interview scoring</b><button class="x" id="xsc" aria-label="Hide scoring" title="Hide scoring">${icon('x', 16)}</button></div><div class="cp-pane-b" id="scbody"></div></aside>
         </div></div>`;
       $('.cp-main', el).scrollTop = keepScroll;
+      layoutSplit(el, showResume, showScore);
       $('#cpclose', el).onclick = () => { window.close(); setTimeout(() => { if (!window.closed) location.hash = `#/pipeline/${a.job_id || ''}`; }, 150); };
       const setRes = v => { showResume = v; setPref('cp.resume', v ? '1' : '0'); render(); };
       const setSc = v => { showScore = v; setPref('cp.score', v ? '1' : '0'); render(); };
