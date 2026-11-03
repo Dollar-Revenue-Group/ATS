@@ -1302,7 +1302,7 @@
   }
 
   const MAIL_NAMES = { received: 'application received', rejection: 'rejection', offer: 'offer', hired: 'welcome', interview_invite: 'interview confirmation',
-    interviewer_notice: 'interviewer notice', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_5: 'offer', stage_6: 'welcome' };
+    interviewer_notice: 'interviewer notice', stage_9: 'Manual Screened', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_5: 'offer', stage_6: 'welcome' };
   const mailName = k => MAIL_NAMES[k] || String(k).replace(/_/g, ' ');
 
   function rejectFlow(id, after) {
@@ -1730,6 +1730,7 @@
   const TEMPLATE_INFO = {
     received: { title: 'Applied', when: 'Sent when a candidate applies on the careers site or you upload their resume.', ph: BASE_PH },
     screened: { title: 'Screened', when: 'Sent when a candidate moves to Screened. Off by default: the AI moves every new applicant to Screened, so switching this on emails everyone once they are scored.', ph: BASE_PH },
+    manual_screened: { title: 'Manual Screened', when: 'Sent when you move a candidate to Manual Screened after reviewing them yourself.', ph: BASE_PH },
     round_1: { title: 'Round 1', when: "Sent when a candidate is moved to Round 1. Includes the link to book a time with Round 1's interviewer (set on each job under Panel and rounds).", ph: ROUND_PH, need: 'booking_link' },
     round_2: { title: 'Round 2', when: "Sent when a candidate is moved to Round 2, with the booking link for Round 2's interviewer.", ph: ROUND_PH, need: 'booking_link' },
     round_3: { title: 'Round 3', when: "Sent when a candidate is moved to Round 3, with the booking link for Round 3's interviewer.", ph: ROUND_PH, need: 'booking_link' },
@@ -1744,7 +1745,7 @@
   const fillSample = s => String(s || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => SAMPLE[k] ?? '');
   async function templateSettings(sb) {
     const ts = (await api.templates()).filter(t => t.key !== 'round_invite');
-    const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
     ts.sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     sb.innerHTML = `<div id="senders"></div><div class="card card-b small muted" style="margin-bottom:14px">These are the default emails for every job. Each pipeline stage has its own email, and it goes out automatically when a candidate enters that stage. Click a placeholder to insert it; it is filled in for each candidate. Switch a stage off to stop its email. A job can have its own wording and sender on its <b>Emails</b> tab.</div>
       <div style="display:grid;gap:14px">${ts.map(t => { const info = TEMPLATE_INFO[t.key] || { title: t.label || t.key, when: '', ph: BASE_PH }; const on = t.enabled !== false;
@@ -1832,7 +1833,7 @@
   async function jobEmails(body, job, canEdit) {
     const [defs, own0, senders] = await Promise.all([api.templates(), api.jobTemplates(job.id), api.senders().catch(() => [])]);
     let own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
-    const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
     const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     const dis = canEdit ? '' : 'disabled';
     const active = senders.filter(s => s.active !== false || s.id === job.sender_id);
@@ -1896,7 +1897,7 @@
     let defs = [], own0 = [];
     try { [defs, own0] = await Promise.all([api.templates(), job?.id ? api.jobTemplates(job.id) : []]); } catch (e) { host.innerHTML = '<div class="small muted">Could not load the email templates. You can still set them later on the job\'s Emails tab.</div>'; return { value: () => ({ changes: [] }) }; }
     const own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
-    const order = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const order = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
     const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
     const st = Object.fromEntries(ts.map(t => { const o = own[t.key];
       // A job row that only switches an email off (same wording as the default) still counts as "Default"
