@@ -701,7 +701,8 @@
       <div class="board-tools"><button class="btn sm" id="copylinks" aria-haspopup="menu">${icon('cal', 15)}Copy booking link ▾</button><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
         <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="iscore">Interview score</button><button data-s="new">Newest</button></div>
-        <div class="seg" role="group" aria-label="Column width" title="Column width (or drag the ⇔ handle between columns)"><button data-bw="210">S</button><button data-bw="270">M</button><button data-bw="340">L</button></div></div></div>
+        <div class="seg" role="group" aria-label="Column width" title="Column width (or drag the ⇔ handle between columns)"><button data-bw="210">S</button><button data-bw="270">M</button><button data-bw="340">L</button></div>
+        <div class="seg" role="group" aria-label="Move around the board"><button id="bpl" title="Scroll left" aria-label="Scroll the board left"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button><button id="bpan" title="Pan tool: drag anywhere on the board to move left and right" aria-pressed="false"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/></svg>Pan</button><button id="bpr" title="Scroll right" aria-label="Scroll the board right"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button></div></div></div>
       <div class="board" id="board"></div>`;
     $('#jobsel').onchange = e => location.hash = `#/pipeline/${e.target.value}`;
     let team = []; try { team = await api.team(); } catch (e) { team = []; }
@@ -717,7 +718,7 @@
         const shut = bv.collapsed.includes(s.id);
         if (shut) return `<section class="col shut" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'}"><button class="col-open" data-coltog="${s.id}" title="Show ${esc(s.name)}" aria-label="Show ${esc(s.name)}"><span class="col-dot"></span><span class="n">${list.length}</span><span class="col-vt">${esc(s.name)}</span></button></section>${ci < cols.length - 1 ? '<div class="col-gap"></div>' : ''}`;
         return `<section class="col" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'};width:${colW(s.id)}px"><div class="col-h"><span class="col-t"><span class="col-dot"></span><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="col-copy" data-coltog="${s.id}" title="Collapse ${esc(s.name)}" aria-label="Collapse ${esc(s.name)}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4 6 8l4 4"/></svg></button>${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
-          <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="true" data-card="${c.id}" tabindex="0">
+          <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="${bv.pan ? 'false' : 'true'}" data-card="${c.id}" tabindex="0">
             <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b title="${esc(c.full_name)}">${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div><a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
             ${c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
           </article>`).join('') || '<div class="col-empty">Drop a candidate here</div>'}</div></section>${ci < cols.length - 1 ? `<div class="col-rs" data-rs="${s.id}" role="separator" aria-orientation="vertical" aria-label="Resize ${esc(s.name)}" tabindex="0" title="Drag to widen or narrow ${esc(s.name)} · double-click to reset"><span class="col-grip"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4 1 8l4 4M11 4l4 4-4 4"/></svg></span></div>` : ''}`; }).join('');
@@ -758,7 +759,34 @@
     const markBw = () => $$('[data-bw]').forEach(x => x.classList.toggle('on', +x.dataset.bw === bv.def && !Object.keys(bv.w).length));
     $$('[data-bw]').forEach(b => b.onclick = () => { bv.def = +b.dataset.bw; bv.w = {}; saveBv(); markBw(); draw(); });
     markBw();
-    await draw();
+    // Pan: drag empty board space (or anywhere, with the Pan tool on) to move left and right; arrows jump one column
+    const board = $('#board');
+    const markPan = () => { const b = $('#bpan'); b.classList.toggle('on', !!bv.pan); b.setAttribute('aria-pressed', String(!!bv.pan)); board.classList.toggle('panmode', !!bv.pan); };
+    $('#bpan').onclick = () => { bv.pan = !bv.pan; saveBv(); markPan(); draw(); };
+    const step = dir => board.scrollBy({ left: dir * Math.max(240, (board.querySelector('.col:not(.shut)')?.getBoundingClientRect().width || 270) + 16), behavior: 'smooth' });
+    $('#bpl').onclick = () => step(-1); $('#bpr').onclick = () => step(1);
+    const arrows = () => { $('#bpl').disabled = board.scrollLeft <= 2; $('#bpr').disabled = board.scrollLeft >= board.scrollWidth - board.clientWidth - 2; };
+    board.addEventListener('scroll', arrows, { passive: true }); new ResizeObserver(arrows).observe(board);
+    let pan = null, moved = false;
+    board.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || e.pointerType === 'touch') return;
+      const t = e.target;
+      if (t.closest('button,a,input,select,textarea,.col-rs,[data-rs]')) return;
+      if (!bv.pan && t.closest('.kcard')) return;            // normal mode: cards keep drag-and-drop
+      pan = { x: e.clientX, sl: board.scrollLeft, id: e.pointerId }; moved = false;
+    });
+    window.addEventListener('pointermove', e => { if (!pan || e.pointerId !== pan.id) return;
+      const dx = e.clientX - pan.x;
+      if (!moved && Math.abs(dx) < 4) return;
+      if (!moved) { moved = true; board.classList.add('panning'); try { board.setPointerCapture(pan.id); } catch (er) { /* fine */ } }
+      board.scrollLeft = pan.sl - dx; e.preventDefault(); });
+    const endPan = () => { if (!pan) return; pan = null; board.classList.remove('panning'); };
+    window.addEventListener('pointerup', endPan); window.addEventListener('pointercancel', endPan);
+    board.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);   // a pan is not a click
+    // Mouse wheel over the column headers moves the board sideways
+    board.addEventListener('wheel', e => { if (!e.target.closest('.col-h,.col-open') || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; board.scrollLeft += e.deltaY; e.preventDefault(); }, { passive: false });
+    markPan();
+    await draw(); arrows();
     state.redraw = draw;
   }
 

@@ -834,3 +834,12 @@ body.col-resizing{cursor:col-resize;user-select:none}
 .col-vt{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--display);font-weight:700;font-size:13px;white-space:nowrap}
 .col-open:hover .col-vt{color:var(--accent-strong)}
 @media (max-width:760px){.board>.col{width:78vw!important}.col-rs{flex-basis:10px}.col-grip{display:none}}
+
+/* Pipeline pan */
+.board{cursor:grab}
+.board .kcard{cursor:grab}
+.board.panmode,.board.panmode .kcard{cursor:grab}
+.board.panning,.board.panning *{cursor:grabbing!important;user-select:none}
+#bpan{display:inline-flex;gap:6px;align-items:center}
+#bpl,#bpr{display:inline-flex;align-items:center;padding-left:10px;padding-right:10px}
+#bpl:disabled,#bpr:disabled{opacity:.35;cursor:default}
