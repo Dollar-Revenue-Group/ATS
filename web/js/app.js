@@ -4,52 +4,65 @@
   const STAGES = ATS.STAGES;
   const { ROUND_STAGE, STAGE_ROUND } = ATS;
   const CFG = window.ATS_CONFIG || {};
-  /* ───────── look & feel options (staging and local only) ───────── */
-  // Lets the team try font and colour styles side by side before one becomes the default for the live site
-  const LOOKS = [
-    { k: 'modern', name: 'Modern', note: 'Inter + Plus Jakarta Sans · DRG green. Clean and sharp, like Linear or Notion.', font: null,
-      sw: ['#178A35', '#E2F4E3', '#0E1A1F'], head: "'Plus Jakarta Sans',sans-serif", body: "'Inter',sans-serif" },
-    { k: 'calm', name: 'Easy reading', note: 'Lexend, a font designed to make reading faster and easier · calm blue.', font: 'Lexend:wght@400;500;600;700',
-      sw: ['#2F5BD3', '#E6EDFC', '#14213D'], head: "'Lexend',sans-serif", body: "'Lexend',sans-serif" },
-    { k: 'editorial', name: 'Editorial', note: 'Fraunces headings + Source Sans 3 text · warm paper with deep teal. Feels like a magazine.', font: 'Fraunces:opsz,wght@9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700',
-      sw: ['#0F766E', '#DDF3EF', '#2A2420'], head: "'Fraunces',serif", body: "'Source Sans 3',sans-serif" }
+  /* ───────── appearance: fonts, colours, text size (Settings → Appearance) ───────── */
+  // Saved per person in this browser
+  const FONTS = [
+    { k: 'modern', name: 'Inter + Plus Jakarta Sans', tag: 'Default · clean and sharp', head: "'Plus Jakarta Sans'", body: "'Inter'", g: null },
+    { k: 'lexend', name: 'Lexend', tag: 'Designed for easy reading', head: "'Lexend'", body: "'Lexend'", g: 'Lexend:wght@400;500;600;700' },
+    { k: 'atkinson', name: 'Atkinson Hyperlegible', tag: 'Very clear letters, great for long reading', head: "'Atkinson Hyperlegible'", body: "'Atkinson Hyperlegible'", g: 'Atkinson+Hyperlegible:wght@400;700' },
+    { k: 'dmsans', name: 'DM Sans', tag: 'Soft and friendly', head: "'DM Sans'", body: "'DM Sans'", g: 'DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700' },
+    { k: 'manrope', name: 'Manrope', tag: 'Modern and roomy', head: "'Manrope'", body: "'Manrope'", g: 'Manrope:wght@400;500;600;700;800' },
+    { k: 'nunito', name: 'Nunito Sans', tag: 'Rounded and warm', head: "'Nunito Sans'", body: "'Nunito Sans'", g: 'Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800' },
+    { k: 'poppins', name: 'Poppins', tag: 'Bold and geometric', head: "'Poppins'", body: "'Poppins'", g: 'Poppins:wght@400;500;600;700' },
+    { k: 'worksans', name: 'Work Sans', tag: 'Plain and practical', head: "'Work Sans'", body: "'Work Sans'", g: 'Work+Sans:wght@400;500;600;700' },
+    { k: 'plex', name: 'IBM Plex Sans', tag: 'Technical and precise', head: "'IBM Plex Sans'", body: "'IBM Plex Sans'", g: 'IBM+Plex+Sans:wght@400;500;600;700' },
+    { k: 'sourcesans', name: 'Source Sans 3', tag: 'Classic and compact', head: "'Source Sans 3'", body: "'Source Sans 3'", g: 'Source+Sans+3:wght@400;500;600;700' },
+    { k: 'editorial', name: 'Fraunces + Source Sans 3', tag: 'Magazine-style serif headings', head: "'Fraunces'", body: "'Source Sans 3'", g: 'Fraunces:opsz,wght@9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700' },
+    { k: 'merri', name: 'Merriweather + Open Sans', tag: 'Traditional serif headings', head: "'Merriweather'", body: "'Open Sans'", g: 'Merriweather:wght@700&family=Open+Sans:wght@400;500;600;700' }
   ];
-  const SIZES = [['normal', 'Normal'], ['large', 'Larger text']];
+  const COLOURS = [
+    { k: 'green', name: 'DRG green', sw: ['#178A35', '#E2F4E3'] }, { k: 'blue', name: 'Calm blue', sw: ['#2F5BD3', '#E6EDFC'] },
+    { k: 'teal', name: 'Deep teal · warm paper', sw: ['#0F766E', '#F6F2EC'] }, { k: 'violet', name: 'Violet', sw: ['#6D4AE0', '#EEE9FD'] }, { k: 'slate', name: 'Slate', sw: ['#334155', '#EEF1F5'] }
+  ];
+  const SIZES = [['normal', 'Normal'], ['large', 'Larger'], ['xl', 'Largest']];
   const lookPref = k => { try { return localStorage.getItem('ats.' + k); } catch (e) { return null; } };
   const lookSet = (k, v) => { try { localStorage.setItem('ats.' + k, v); } catch (e) { /* private mode */ } };
-  function loadLookFont(l) {
-    if (!l.font || document.getElementById('font-' + l.k)) return;
-    const ln = document.createElement('link'); ln.id = 'font-' + l.k; ln.rel = 'stylesheet';
-    ln.href = `https://fonts.googleapis.com/css2?family=${l.font}&display=swap`; document.head.append(ln);
+  function loadFont(f) {
+    if (!f || !f.g || document.getElementById('font-' + f.k)) return;
+    const ln = document.createElement('link'); ln.id = 'font-' + f.k; ln.rel = 'stylesheet';
+    ln.href = `https://fonts.googleapis.com/css2?family=${f.g}&display=swap`; document.head.append(ln);
   }
-  function applyLook(k, size) {
-    const l = LOOKS.find(x => x.k === k) || LOOKS[0]; loadLookFont(l);
-    document.documentElement.dataset.look = l.k; document.documentElement.dataset.size = size === 'large' ? 'large' : 'normal';
+  function applyLook() {
+    // Older saved choices from the "Try a style" button
+    const old = lookPref('look'); if (old && !lookPref('font')) { lookSet('font', old === 'calm' ? 'lexend' : old === 'editorial' ? 'editorial' : 'modern'); lookSet('colour', old === 'calm' ? 'blue' : old === 'editorial' ? 'teal' : 'green'); }
+    const f = FONTS.find(x => x.k === lookPref('font')) || FONTS[0]; loadFont(f);
+    const r = document.documentElement;
+    if (f.k === 'modern') { r.style.removeProperty('--display'); r.style.removeProperty('--body'); }
+    else { r.style.setProperty('--display', `${f.head},"Inter",system-ui,sans-serif`); r.style.setProperty('--body', `${f.body},"Inter",system-ui,sans-serif`); }
+    r.dataset.font = f.k;
+    r.dataset.colour = (COLOURS.find(x => x.k === lookPref('colour')) || COLOURS[0]).k;
+    const sz = lookPref('size'); r.dataset.size = SIZES.some(s => s[0] === sz) ? sz : 'normal';
   }
-  if (window.ATS_ENV !== 'live') applyLook(lookPref('look') || 'modern', lookPref('size'));
-  function lookSwitcher() {
-    if (window.ATS_ENV === 'live' || document.getElementById('lookbtn')) return;
-    LOOKS.forEach(loadLookFont);
-    const b = document.createElement('button'); b.id = 'lookbtn'; b.className = 'look-btn'; b.type = 'button';
-    b.innerHTML = '<span class="aa">Aa</span> Try a style'; b.setAttribute('aria-haspopup', 'dialog');
-    document.body.append(b);
-    b.onclick = () => {
-      const old = document.getElementById('lookpanel'); if (old) { old.remove(); return; }
-      const p = document.createElement('div'); p.id = 'lookpanel'; p.className = 'look-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Try a style');
-      const draw = () => { const cur = document.documentElement.dataset.look, sz = document.documentElement.dataset.size;
-        p.innerHTML = `<div class="row" style="justify-content:space-between"><b>Try a style</b><button class="x" data-lx aria-label="Close">${icon('x', 16)}</button></div>
-          <p class="small muted" style="margin:0">Only you see this, and only on staging. Click a style to apply it to the whole portal, then tell Jay which one to make the default.</p>
-          ${LOOKS.map((l, i) => `<button type="button" class="look-opt ${cur === l.k ? 'on' : ''}" data-look="${l.k}">
-            <span class="look-top"><span class="look-n">${i + 1}</span><b style="font-family:${l.head}">${l.name}</b><span class="look-sw">${l.sw.map(c => `<i style="background:${c}"></i>`).join('')}</span>${cur === l.k ? '<span class="look-cur">In use</span>' : ''}</span>
-            <span class="look-h" style="font-family:${l.head}">Diya Shah · SDR</span>
-            <span class="look-p" style="font-family:${l.body}">Diya has strong outbound experience with clear numbers and the CRM skills the role needs.</span>
-            <span class="small muted" style="font-family:${l.body}">${l.note}</span></button>`).join('')}
-          <div class="row" style="gap:8px;justify-content:space-between"><span class="small"><b>Text size</b></span><div class="seg sm" role="group" aria-label="Text size">${SIZES.map(([k, t]) => `<button type="button" data-size="${k}" class="${sz === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
-        $$('[data-look]', p).forEach(x => x.onclick = () => { lookSet('look', x.dataset.look); applyLook(x.dataset.look, document.documentElement.dataset.size); draw(); });
-        $$('[data-size]', p).forEach(x => x.onclick = () => { lookSet('size', x.dataset.size); applyLook(document.documentElement.dataset.look, x.dataset.size); draw(); });
-        $('[data-lx]', p).onclick = () => p.remove(); };
-      draw(); document.body.append(p);
+  applyLook();
+  function appearanceSettings(sb) {
+    FONTS.forEach(loadFont);
+    const draw = () => { const r = document.documentElement, cf = r.dataset.font, cc = r.dataset.colour, cs = r.dataset.size;
+      sb.innerHTML = `<div class="card"><div class="card-h"><div><h3>Appearance</h3><div class="small muted">Pick the font, colours and text size you find easiest to read. Changes apply straight away, only for you, in this browser.</div></div>
+          <button class="btn sm" id="lkreset">Reset to default</button></div>
+        <div class="card-b" style="display:grid;gap:22px">
+          <div class="ap-sec"><div class="eyebrow">Font</div><div class="ap-fonts">${FONTS.map(f => `<button type="button" class="ap-font ${cf === f.k ? 'on' : ''}" data-font="${f.k}" aria-pressed="${cf === f.k}">
+              <span class="ap-h" style="font-family:${f.head},sans-serif">Diya Shah · SDR</span>
+              <span class="ap-p" style="font-family:${f.body},sans-serif">Strong outbound experience with clear numbers and the CRM skills the role needs.</span>
+              <span class="ap-n"><b>${esc(f.name)}</b>${cf === f.k ? '<span class="look-cur">In use</span>' : ''}<span class="small muted" style="display:block">${esc(f.tag)}</span></span></button>`).join('')}</div></div>
+          <div class="ap-sec"><div class="eyebrow">Colours</div><div class="ap-cols">${COLOURS.map(c => `<button type="button" class="ap-col ${cc === c.k ? 'on' : ''}" data-colour="${c.k}" aria-pressed="${cc === c.k}"><span class="look-sw">${c.sw.map(x => `<i style="background:${x}"></i>`).join('')}</span>${esc(c.name)}</button>`).join('')}</div></div>
+          <div class="ap-sec"><div class="eyebrow">Text size</div><div class="seg" role="group" aria-label="Text size">${SIZES.map(([k, t]) => `<button type="button" data-size="${k}" class="${cs === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+        </div></div>`;
+      $$('[data-font]', sb).forEach(b => b.onclick = () => { lookSet('font', b.dataset.font); applyLook(); draw(); });
+      $$('[data-colour]', sb).forEach(b => b.onclick = () => { lookSet('colour', b.dataset.colour); applyLook(); draw(); });
+      $$('[data-size]', sb).forEach(b => b.onclick = () => { lookSet('size', b.dataset.size); applyLook(); draw(); });
+      $('#lkreset', sb).onclick = () => { ['font', 'colour', 'size', 'look'].forEach(k => lookSet(k, '')); applyLook(); draw(); toast('Back to the default look'); };
     };
+    draw();
   }
   const posOf = id => STAGES.find(s => s.id === id)?.position ?? 0;
   const ivWho = i => i.member?.full_name || i.interviewer?.full_name || '';
@@ -2079,10 +2092,11 @@
   async function settings(el, _a, params) {
     const tab = params.get('tab') || 'panel';
     el.innerHTML = `<div class="page-head"><div><h1>Settings</h1><p>Interview panel, team access, candidate emails and automation connections.</p></div></div>
-      <div class="tabs">${[['panel', 'Interview panel'], ['team', 'Logins'], ['emails', 'Email templates'], ['auto', 'Automation']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div><div id="sb"></div>`;
+      <div class="tabs">${[['panel', 'Interview panel'], ['team', 'Logins'], ['emails', 'Email templates'], ['auto', 'Automation'], ['look', 'Appearance']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div><div id="sb"></div>`;
     $$('[data-t]', el).forEach(b => b.onclick = () => location.hash = `#/settings?tab=${b.dataset.t}`);
     const sb = $('#sb');
     if (tab === 'panel') return panelSettings(sb);
+    if (tab === 'look') return appearanceSettings(sb);
     if (tab === 'team') {
       const ps = await api.profiles();
       sb.innerHTML = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Email</th><th>Role</th></tr></thead><tbody>${ps.map(p => `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(p.full_name, 30)}<b>${esc(p.full_name)}</b></div></td><td class="muted">${esc(p.email)}</td>
@@ -2130,7 +2144,7 @@
       if (!s) return login();
       state.me = await api.me();
       if (!state.me) return login();
-      shell(); lookSwitcher(); await route();
+      shell(); await route();
       state.unsub?.();
       state.unsub = api.subscribe(() => { clearTimeout(timer); timer = setTimeout(() => {
         if (state.route === 'pipeline') state.redraw?.(); else if (['dashboard', 'candidates'].includes(state.route)) route(); refreshBadge(); }, 400); });
