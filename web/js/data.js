@@ -6,12 +6,13 @@
   const STAGES = [
     { id: 1, name: 'Applied', position: 1 }, { id: 2, name: 'Screened', position: 2 }, { id: 9, name: 'Manual Screened', position: 3 },
     { id: 3, name: 'Round 1', position: 4 }, { id: 4, name: 'Round 2', position: 5 }, { id: 8, name: 'Round 3', position: 6 },
-    { id: 5, name: 'Offer', position: 7 }, { id: 6, name: 'Hired', position: 8, is_terminal: true },
-    { id: 7, name: 'Rejected', position: 9, is_terminal: true }
+    { id: 10, name: 'Round 4', position: 7 }, { id: 11, name: 'Round 5', position: 8 },
+    { id: 5, name: 'Offer', position: 9 }, { id: 6, name: 'Hired', position: 10, is_terminal: true },
+    { id: 7, name: 'Rejected', position: 11, is_terminal: true }
   ];
   // Interview rounds map to pipeline stages
-  const ROUND_STAGE = { 1: 3, 2: 4, 3: 8 };
-  const STAGE_ROUND = { 3: 1, 4: 2, 8: 3 };
+  const ROUND_STAGE = { 1: 3, 2: 4, 3: 8, 4: 10, 5: 11 };
+  const STAGE_ROUND = { 3: 1, 4: 2, 8: 3, 10: 4, 11: 5 };
 
   /* ───────────── Live back end ───────────── */
   function LiveApi(cfg) {

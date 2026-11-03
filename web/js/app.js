@@ -236,7 +236,7 @@
   const bindApps = el => $$('[data-app]', el).forEach(n => { n.onclick = () => openCandidate(n.dataset.app); n.onkeydown = e => e.key === 'Enter' && openCandidate(n.dataset.app); });
 
   /* ───────── jobs ───────── */
-  const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#178A35', '#5DBB2C', '#8FBF1F', '#B4720E', '#1C8B57'];
+  const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#3B82C4', '#178A35', '#3FA62E', '#5DBB2C', '#8FBF1F', '#B5C91A', '#B4720E', '#1C8B57'];
   async function jobsPage(el, _a, params) {
     const jobs = state.jobs = await api.jobs();
     const canEdit = ['admin', 'recruiter'].includes(state.me.role);
@@ -253,8 +253,8 @@
           <div class="job-top"><div><h3>${esc(j.title)}${j.client ? ` <span class="chip ext" style="font-size:11px;vertical-align:middle">${esc(j.client)}</span>` : ''}</h3><div class="small muted" style="margin-top:4px">${esc(j.department || '')} · ${esc(j.location || '')}</div></div>
             <span class="chip st-${j.status}">${j.status.replace('_', ' ')}</span></div>
           <div><div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">Pipeline</span><span class="small num">${active} active</span></div>
-            <div class="stagebar">${[1, 2, 3, 4, 8, 5, 6].map((s, k) => `<i style="width:${(j.byStage[s] || 0) / Math.max(1, active) * 100}%;background:${STAGE_COLORS[k]}" title="${stageName(s)}: ${j.byStage[s] || 0}"></i>`).join('')}</div></div>
-          <div class="job-foot"><span>${j.rules === null ? '<span style="color:var(--review)">No AI brief yet</span>' : `${j.byStage[2] || 0} screened · ${(j.byStage[3] || 0) + (j.byStage[4] || 0) + (j.byStage[8] || 0)} interviewing`}</span><span>${fmtDate(j.created_at)}</span></div>
+            <div class="stagebar">${[1, 2, 9, 3, 4, 8, 10, 11, 5, 6].map((s, k) => `<i style="width:${(j.byStage[s] || 0) / Math.max(1, active) * 100}%;background:${STAGE_COLORS[k]}" title="${stageName(s)}: ${j.byStage[s] || 0}"></i>`).join('')}</div></div>
+          <div class="job-foot"><span>${j.rules === null ? '<span style="color:var(--review)">No AI brief yet</span>' : `${j.byStage[2] || 0} screened · ${[3, 4, 8, 10, 11].reduce((t, s) => t + (j.byStage[s] || 0), 0)} interviewing`}</span><span>${fmtDate(j.created_at)}</span></div>
         </article>`; }).join('') || `<div class="card empty">${only ? `No ${only.replace('_', ' ')} roles right now.` : 'No jobs yet. Create the first role to start screening.'}</div>`}</div>`;
     $$('[data-job]', el).forEach(n => { n.onclick = () => location.hash = `#/jobs/${n.dataset.job}`; n.onkeydown = e => e.key === 'Enter' && n.click(); });
     if (canEdit) $('#newjob').onclick = () => jobForm();
@@ -452,7 +452,7 @@
   }
 
   /* Hiring panel and interview rounds: shared editor used by the New job form and the job's tab */
-  const ROUND_NAMES = ['Intro call', 'Skills interview', 'Final interview'];
+  const ROUND_NAMES = ['Intro call', 'Skills interview', 'Final interview', 'Round 4 interview', 'Round 5 interview'];
   // Who sends what: the booking link a candidate gets for a round with this interviewer
   const linkSource = t => !t ? '' : t.cal_account ? `${firstName(t.full_name)}'s Cal.com` : t.booking_url ? `${firstName(t.full_name)}'s booking page` : 'the ATS booking page';
   const firstName = n => String(n || '').trim().split(' ')[0];
@@ -498,7 +498,7 @@
         <div class="field"><span class="lbl" style="font-size:13px;font-weight:600">Coordinators</span>
           <div class="small muted">Get an email whenever a candidate enters a round, together with that round's interviewer, so they can call the candidate and make sure they book. Leave empty for no round emails.</div>
           <div class="iv-picks" role="group" aria-label="Coordinators" style="margin-top:4px">${team.filter(t => t.active !== false).map(t => `<label class="iv-pick ${st.coord.includes(t.id) ? 'on' : ''}"><input type="checkbox" data-co="${t.id}" ${st.coord.includes(t.id) ? 'checked' : ''} ${dis}>${esc(t.full_name)}</label>`).join('')}</div></div>
-        <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
+        <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
         <div class="small muted" style="margin-top:-6px">Moving a candidate into a round emails them the interviewer's link to book a time. Anyone else can join the call from the shared calendar.</div>
         ${st.rounds.map((rd, i) => { const t = byId(rd.interviewer_id);
           return `<div class="round-row"><span class="round-n">Round ${i + 1}</span>
@@ -1302,7 +1302,7 @@
   }
 
   const MAIL_NAMES = { received: 'application received', rejection: 'rejection', offer: 'offer', hired: 'welcome', interview_invite: 'interview confirmation',
-    interviewer_notice: 'interviewer notice', stage_9: 'Manual Screened', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_5: 'offer', stage_6: 'welcome' };
+    interviewer_notice: 'interviewer notice', stage_9: 'Manual Screened', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_10: 'Round 4 booking link', stage_11: 'Round 5 booking link', stage_5: 'offer', stage_6: 'welcome' };
   const mailName = k => MAIL_NAMES[k] || String(k).replace(/_/g, ' ');
 
   function rejectFlow(id, after) {
@@ -1334,7 +1334,7 @@
     const local = new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
     const m = modal('Schedule interview', `
       <p class="small muted" style="margin:0">Use this when you have already agreed a time with the candidate. Otherwise just move them to the round: they get an email to book a time themselves.</p>
-      <div class="grid2"><div class="field"><label for="ss">Round</label><select class="input" id="ss">${[1, 2, 3].map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+      <div class="grid2"><div class="field"><label for="ss">Round</label><select class="input" id="ss">${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
         <div class="field"><label for="sd">Length</label><select class="input" id="sd">${[15, 30, 45, 60, 90].map(x => `<option value="${x}">${x} min</option>`).join('')}</select></div></div>
       <div class="field"><label for="st">Date and time (your computer's time zone)</label><input class="input" type="datetime-local" id="st" value="${local}"></div>
       <div class="field"><label for="si">Interviewer</label><select class="input" id="si">${active.map(t => `<option value="${t.id}">${esc(t.full_name)}${t.title ? ' · ' + esc(t.title) : ''}</option>`).join('')}</select></div>
@@ -1734,6 +1734,8 @@
     round_1: { title: 'Round 1', when: "Sent when a candidate is moved to Round 1. Includes the link to book a time with Round 1's interviewer (set on each job under Panel and rounds).", ph: ROUND_PH, need: 'booking_link' },
     round_2: { title: 'Round 2', when: "Sent when a candidate is moved to Round 2, with the booking link for Round 2's interviewer.", ph: ROUND_PH, need: 'booking_link' },
     round_3: { title: 'Round 3', when: "Sent when a candidate is moved to Round 3, with the booking link for Round 3's interviewer.", ph: ROUND_PH, need: 'booking_link' },
+    round_4: { title: 'Round 4', when: "Sent when a candidate is moved to Round 4, with the booking link for Round 4's interviewer.", ph: ROUND_PH, need: 'booking_link' },
+    round_5: { title: 'Round 5', when: "Sent when a candidate is moved to Round 5, with the booking link for Round 5's interviewer.", ph: ROUND_PH, need: 'booking_link' },
     offer: { title: 'Offer', when: 'Sent when a candidate is moved to Offer.', ph: BASE_PH },
     hired: { title: 'Hired', when: 'Sent when a candidate is moved to Hired.', ph: BASE_PH },
     rejection: { title: 'Rejected', when: 'Sent when you reject a candidate with "Send the rejection email" ticked. {{rejection_reason}} is the reason entered in the reject pop-up.', ph: [...BASE_PH, 'rejection_reason'] },
@@ -1745,7 +1747,7 @@
   const fillSample = s => String(s || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => SAMPLE[k] ?? '');
   async function templateSettings(sb) {
     const ts = (await api.templates()).filter(t => t.key !== 'round_invite');
-    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'round_4', 'round_5', 'offer', 'hired', 'rejection', 'interview_invite'];
     ts.sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     sb.innerHTML = `<div id="senders"></div><div class="card card-b small muted" style="margin-bottom:14px">These are the default emails for every job. Each pipeline stage has its own email, and it goes out automatically when a candidate enters that stage. Click a placeholder to insert it; it is filled in for each candidate. Switch a stage off to stop its email. A job can have its own wording and sender on its <b>Emails</b> tab.</div>
       <div style="display:grid;gap:14px">${ts.map(t => { const info = TEMPLATE_INFO[t.key] || { title: t.label || t.key, when: '', ph: BASE_PH }; const on = t.enabled !== false;
@@ -1833,7 +1835,7 @@
   async function jobEmails(body, job, canEdit) {
     const [defs, own0, senders] = await Promise.all([api.templates(), api.jobTemplates(job.id), api.senders().catch(() => [])]);
     let own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
-    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'round_4', 'round_5', 'offer', 'hired', 'rejection', 'interview_invite'];
     // Screened never emails (switched off for every job), so it is not offered per job
     const ts = defs.filter(t => !['round_invite', 'screened'].includes(t.key)).sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     const dis = canEdit ? '' : 'disabled';
@@ -1907,7 +1909,7 @@
     let defs = [], own0 = [];
     try { [defs, own0] = await Promise.all([api.templates(), job?.id ? api.jobTemplates(job.id) : []]); } catch (e) { host.innerHTML = '<div class="small muted">Could not load the email templates. You can still set them later on the job\'s Emails tab.</div>'; return { value: () => ({ changes: [] }) }; }
     const own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
-    const order = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const order = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'round_4', 'round_5', 'offer', 'hired', 'rejection', 'interview_invite'];
     const ts = defs.filter(t => !['round_invite', 'screened'].includes(t.key)).sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
     const st = Object.fromEntries(ts.map(t => { const o = own[t.key];
       // A job row that only switches an email off (same wording as the default) still counts as "Default"
