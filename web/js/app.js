@@ -979,6 +979,60 @@
     } catch (e) { host.innerHTML = `<div class="empty">${esc(e.message || 'The file could not be shown.')} Use Download instead.</div>`; return null; }
   }
 
+  /* ───────── AI interview questions (candidate full page) ───────── */
+  const iqState = {};
+  const iqTick = (setId, i, v) => { try { const k = 'ats.iq.' + setId; const o = JSON.parse(localStorage.getItem(k) || '{}'); if (v === undefined) return !!o[i]; o[i] = v; localStorage.setItem(k, JSON.stringify(o)); } catch (e) { return false; } };
+  async function questionsCard(host, a) {
+    const st = iqState[a.id] = iqState[a.id] || { busy: false, form: false, sel: null, open: {} };
+    const canGen = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
+    let sets = []; try { sets = await api.interviewQuestions(a.id); } catch (e) { sets = []; }
+    const rounds = a.jobs?.rounds || []; const nR = Math.max(rounds.length, 1);
+    const curRound = STAGE_ROUND[a.stage_id] || 1;
+    const draw = () => {
+      const set = sets.find(x => x.id === st.sel) || sets[0] || null;
+      const items = set?.questions?.items || [];
+      const form = st.form || !set;
+      const done = set ? items.filter((_, i) => iqTick(set.id || 'x', i)).length : 0;
+      host.innerHTML = `<div class="card iq">
+        <div class="card-h"><div class="row" style="gap:10px"><span class="iq-ic">${icon('spark', 18)}</span><div><h3>Interview questions</h3><div class="small muted">${set ? `Round ${set.round_no || '–'}${rounds[(set.round_no || 1) - 1]?.name ? ' · ' + esc(rounds[(set.round_no || 1) - 1].name) : ''} · written by AI for ${esc(set.created_by_name || 'the team')} · ${fmtDate(set.created_at)}${items.length ? ` · ${done}/${items.length} asked` : ''}` : 'AI writes questions for this candidate from their resume, the job and your scoring points.'}</div></div></div>
+          ${set && !st.busy ? `<div class="row" style="gap:6px">${sets.length > 1 ? `<select class="input sm" id="iqsel" aria-label="Earlier question sets">${sets.map((x, i) => `<option value="${x.id}" ${x.id === set.id ? 'selected' : ''}>Set ${sets.length - i} · Round ${x.round_no || '–'} · ${fmtDate(x.created_at)}</option>`).join('')}</select>` : ''}
+            <button class="btn sm ghost" id="iqcopy" title="Copy all questions">${icon('copy', 14)}Copy</button>${canGen ? `<button class="btn sm" id="iqnew">${icon('spark', 14)}New set</button>` : ''}</div>` : ''}</div>
+        <div class="card-b iq-b">
+          ${st.busy ? `<div class="iq-busy"><span class="spin"></span><div><b>Writing questions for ${esc(firstName(a.candidates?.full_name) || 'this candidate')}…</b><div class="small muted">Reading the resume, the job and the scores so far. This takes about 20 seconds.</div></div></div>`
+          : form && canGen ? `<div class="iq-form">
+              <div class="grid2"><div class="field"><label for="iqr">For which round?</label><select class="input" id="iqr">${Array.from({ length: nR }, (_, k) => k + 1).map(n => `<option value="${n}" ${n === (st.round || curRound) ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+                <div class="field"><label for="iqf">Anything to focus on? <span class="muted">(optional)</span></label><input class="input" id="iqf" maxlength="300" placeholder="e.g. objection handling, why they left their last job" value="${esc(st.focus || '')}"></div></div>
+              <div class="row" style="gap:8px"><button class="btn primary" id="iqgo">${icon('spark', 15)}Write questions</button>${set ? '<button class="btn" id="iqcancel">Cancel</button>' : ''}<span class="small muted">8–10 questions in interview order, each with what to listen for and a follow-up.</span></div>
+              ${st.err ? `<div class="small" style="color:var(--disq)" role="alert">${esc(st.err)}</div>` : ''}</div>`
+          : !set ? '<div class="small muted">No questions yet. Ask a recruiter or hiring manager to write them.</div>' : ''}
+          ${set && !st.busy && !(form && canGen) ? `${set.questions?.intro ? `<div class="iq-intro">${esc(set.questions.intro)}</div>` : ''}${set.focus ? `<div class="small muted">Focus asked for: ${esc(set.focus)}</div>` : ''}
+            <ol class="iq-list">${items.map((q, i) => { const on = iqTick(set.id || 'x', i), open = !!st.open[i];
+              return `<li class="iq-q ${on ? 'asked' : ''}"><button type="button" class="iq-tick" data-tick="${i}" aria-pressed="${on}" title="${on ? 'Asked' : 'Mark as asked'}">${on ? '✓' : i + 1}</button>
+                <div class="iq-main"><div class="iq-top"><span class="tag iq-area">${esc(q.area || 'General')}</span></div>
+                  <div class="iq-text">${esc(q.question)}</div>
+                  <button type="button" class="linkbtn small" data-more="${i}">${open ? 'Hide tips' : 'What to listen for'}</button>
+                  ${open ? `<dl class="iq-more"><div><dt>Why ask</dt><dd>${esc(q.why)}</dd></div><div><dt>A strong answer</dt><dd>${esc(q.look_for)}</dd></div><div><dt>Follow-up</dt><dd>${esc(q.follow_up)}</dd></div></dl>` : ''}</div></li>`; }).join('')}</ol>
+            ${set.id && canGen ? '<div class="row" style="justify-content:flex-end"><button class="linkbtn small" id="iqdel" style="color:var(--muted)">Delete this set</button></div>' : ''}` : ''}
+        </div></div>`;
+      const go = $('#iqgo', host);
+      if (go) go.onclick = async () => { st.round = +$('#iqr', host).value; st.focus = $('#iqf', host).value.trim(); st.busy = true; st.err = ''; draw();
+        try { const r = await api.generateQuestions(a.id, st.round, st.focus); sets = [r.set, ...sets.filter(x => x.id !== r.set.id)]; st.sel = r.set.id; st.form = false; st.open = {}; toast(r.message || 'Questions ready'); }
+        catch (e) { st.err = e.message || 'Could not write questions. Try again.'; }
+        st.busy = false; if (!host.isConnected) { const h = document.getElementById('iqcard'); if (h) questionsCard(h, a); return; } draw(); };
+      const cn = $('#iqcancel', host); if (cn) cn.onclick = () => { st.form = false; st.err = ''; draw(); };
+      const nw = $('#iqnew', host); if (nw) nw.onclick = () => { st.form = true; draw(); $('#iqf', host)?.focus(); };
+      const sel = $('#iqsel', host); if (sel) sel.onchange = () => { st.sel = sel.value; st.open = {}; draw(); };
+      const cp = $('#iqcopy', host); if (cp) cp.onclick = async () => { const s = sets.find(x => x.id === st.sel) || sets[0];
+        const txt = `${a.candidates?.full_name || 'Candidate'} · ${a.jobs?.title || ''} · Round ${s.round_no || ''}\n${s.questions?.intro || ''}\n\n` + (s.questions?.items || []).map((q, i) => `${i + 1}. [${q.area}] ${q.question}\n   Listen for: ${q.look_for}\n   Follow-up: ${q.follow_up}`).join('\n\n');
+        toast(await copyText(txt) ? 'Questions copied' : 'Could not copy', false); };
+      $$('[data-tick]', host).forEach(b => b.onclick = () => { const s = sets.find(x => x.id === st.sel) || sets[0]; const i = +b.dataset.tick; iqTick(s.id || 'x', i, !iqTick(s.id || 'x', i)); draw(); });
+      $$('[data-more]', host).forEach(b => b.onclick = () => { const i = +b.dataset.more; st.open[i] = !st.open[i]; draw(); });
+      const dl = $('#iqdel', host); if (dl) dl.onclick = async () => { if (dl.dataset.armed !== '1') { dl.dataset.armed = '1'; dl.textContent = 'Click again to delete'; return; }
+        const s = sets.find(x => x.id === st.sel) || sets[0]; try { await api.deleteQuestions(s.id); sets = sets.filter(x => x.id !== s.id); st.sel = null; toast('Question set deleted'); draw(); } catch (e) { fail(e); } };
+    };
+    draw();
+  }
+
   async function candidatePage(el, id, params) {
     document.body.classList.add('cp-mode');
     const pref = k => { try { return localStorage.getItem('ats.' + k); } catch (e) { return null; } };
@@ -1009,7 +1063,7 @@
         </header>
         <div class="cp-grid ${showResume ? '' : 'no-res'} ${showScore ? '' : 'no-sc'}">
           <section class="cp-pane cp-resume" ${showResume ? '' : 'hidden'} aria-label="Resume"><div class="cp-pane-h"><b>${icon('file', 15)}${esc(a.resumes?.file_name || 'Resume')}</b><span class="row" id="reslinks" style="gap:6px"></span><button class="x" id="xres" aria-label="Hide resume" title="Hide resume">${icon('x', 16)}</button></div><div class="cp-pane-b" id="resbody"></div></section>
-          <section class="cp-main" aria-label="Candidate details">${candidateBody(a, iscores, canAct, 'page')}</section>
+          <section class="cp-main" aria-label="Candidate details"><div id="iqcard"></div>${candidateBody(a, iscores, canAct, 'page')}</section>
           <aside class="cp-pane cp-scoring" ${showScore ? '' : 'hidden'} aria-label="Interview scoring"><div class="cp-pane-h"><b>${icon('check', 15)}Interview scoring</b><button class="x" id="xsc" aria-label="Hide scoring" title="Hide scoring">${icon('x', 16)}</button></div><div class="cp-pane-b" id="scbody"></div></aside>
         </div></div>`;
       $('.cp-main', el).scrollTop = keepScroll;
@@ -1021,6 +1075,7 @@
         if (!a.resumes?.storage_path) $('#resbody', el).innerHTML = '<div class="empty">No resume file for this candidate.</div>';
         else { if (blobUrl) URL.revokeObjectURL(blobUrl); blobUrl = await fileInto($('#resbody', el), { path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }, $('#reslinks', el)); resumeLoaded = true; }
       }
+      questionsCard($('#iqcard', el), a);
       if (showScore) scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); });
       if (canAct) bindCandidate(el, a, render, { score: o => { scoreOpts = o.interview ? { interviewId: o.interview.id } : o.existingId ? { existingId: o.existingId } : {}; if (!showScore) setSc(true); else scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); }); $('.cp-scoring', el)?.scrollIntoView({ block: 'nearest' }); } });
     };
