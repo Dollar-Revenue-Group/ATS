@@ -158,7 +158,7 @@
 
       async interviews() {
         return ok(await sb.from('interviews')
-          .select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email), applications(id, job_id, jobs(title,client,rounds), candidates(full_name,email,phone), resumes(file_name))')
+          .select('*, interviewer:profiles!interviews_interviewer_id_fkey(full_name,email), member:team_members(full_name,email), applications(id, job_id, jobs(title,client,rounds,interview_scoring), candidates(full_name,email,phone), resumes(file_name))')
           .order('scheduled_at'));
       },
       async schedule(iv, currentStage) {
@@ -425,7 +425,7 @@
       async interviews() {
         await wait();
         return interviews.map(i => { const a = applications.find(x => x.id === i.application_id); const c = candidates.find(x => x.id === a.candidate_id);
-          return { ...i, interviewer: people.find(p => p.id === i.interviewer_id), applications: { id: a.id, job_id: a.job_id, jobs: { title: jobs.find(j => j.id === a.job_id).title }, candidates: c, resumes: resumes.find(r => r.id === a.resume_id) } }; })
+          return { ...i, interviewer: people.find(p => p.id === i.interviewer_id), applications: { id: a.id, job_id: a.job_id, jobs: (({ title, client, rounds, interview_scoring }) => ({ title, client, rounds, interview_scoring }))(jobs.find(j => j.id === a.job_id)), candidates: c, resumes: resumes.find(r => r.id === a.resume_id) } }; })
           .sort((p, q) => p.scheduled_at.localeCompare(q.scheduled_at));
       },
       async schedule(iv, currentStage) {

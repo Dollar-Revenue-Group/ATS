@@ -4,6 +4,53 @@
   const STAGES = ATS.STAGES;
   const { ROUND_STAGE, STAGE_ROUND } = ATS;
   const CFG = window.ATS_CONFIG || {};
+  /* ───────── look & feel options (staging and local only) ───────── */
+  // Lets the team try font and colour styles side by side before one becomes the default for the live site
+  const LOOKS = [
+    { k: 'modern', name: 'Modern', note: 'Inter + Plus Jakarta Sans · DRG green. Clean and sharp, like Linear or Notion.', font: null,
+      sw: ['#178A35', '#E2F4E3', '#0E1A1F'], head: "'Plus Jakarta Sans',sans-serif", body: "'Inter',sans-serif" },
+    { k: 'calm', name: 'Easy reading', note: 'Lexend, a font designed to make reading faster and easier · calm blue.', font: 'Lexend:wght@400;500;600;700',
+      sw: ['#2F5BD3', '#E6EDFC', '#14213D'], head: "'Lexend',sans-serif", body: "'Lexend',sans-serif" },
+    { k: 'editorial', name: 'Editorial', note: 'Fraunces headings + Source Sans 3 text · warm paper with deep teal. Feels like a magazine.', font: 'Fraunces:opsz,wght@9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700',
+      sw: ['#0F766E', '#DDF3EF', '#2A2420'], head: "'Fraunces',serif", body: "'Source Sans 3',sans-serif" }
+  ];
+  const SIZES = [['normal', 'Normal'], ['large', 'Larger text']];
+  const lookPref = k => { try { return localStorage.getItem('ats.' + k); } catch (e) { return null; } };
+  const lookSet = (k, v) => { try { localStorage.setItem('ats.' + k, v); } catch (e) { /* private mode */ } };
+  function loadLookFont(l) {
+    if (!l.font || document.getElementById('font-' + l.k)) return;
+    const ln = document.createElement('link'); ln.id = 'font-' + l.k; ln.rel = 'stylesheet';
+    ln.href = `https://fonts.googleapis.com/css2?family=${l.font}&display=swap`; document.head.append(ln);
+  }
+  function applyLook(k, size) {
+    const l = LOOKS.find(x => x.k === k) || LOOKS[0]; loadLookFont(l);
+    document.documentElement.dataset.look = l.k; document.documentElement.dataset.size = size === 'large' ? 'large' : 'normal';
+  }
+  if (window.ATS_ENV !== 'live') applyLook(lookPref('look') || 'modern', lookPref('size'));
+  function lookSwitcher() {
+    if (window.ATS_ENV === 'live' || document.getElementById('lookbtn')) return;
+    LOOKS.forEach(loadLookFont);
+    const b = document.createElement('button'); b.id = 'lookbtn'; b.className = 'look-btn'; b.type = 'button';
+    b.innerHTML = '<span class="aa">Aa</span> Try a style'; b.setAttribute('aria-haspopup', 'dialog');
+    document.body.append(b);
+    b.onclick = () => {
+      const old = document.getElementById('lookpanel'); if (old) { old.remove(); return; }
+      const p = document.createElement('div'); p.id = 'lookpanel'; p.className = 'look-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Try a style');
+      const draw = () => { const cur = document.documentElement.dataset.look, sz = document.documentElement.dataset.size;
+        p.innerHTML = `<div class="row" style="justify-content:space-between"><b>Try a style</b><button class="x" data-lx aria-label="Close">${icon('x', 16)}</button></div>
+          <p class="small muted" style="margin:0">Only you see this, and only on staging. Click a style to apply it to the whole portal, then tell Jay which one to make the default.</p>
+          ${LOOKS.map((l, i) => `<button type="button" class="look-opt ${cur === l.k ? 'on' : ''}" data-look="${l.k}">
+            <span class="look-top"><span class="look-n">${i + 1}</span><b style="font-family:${l.head}">${l.name}</b><span class="look-sw">${l.sw.map(c => `<i style="background:${c}"></i>`).join('')}</span>${cur === l.k ? '<span class="look-cur">In use</span>' : ''}</span>
+            <span class="look-h" style="font-family:${l.head}">Diya Shah · SDR</span>
+            <span class="look-p" style="font-family:${l.body}">Diya has strong outbound experience with clear numbers and the CRM skills the role needs.</span>
+            <span class="small muted" style="font-family:${l.body}">${l.note}</span></button>`).join('')}
+          <div class="row" style="gap:8px;justify-content:space-between"><span class="small"><b>Text size</b></span><div class="seg sm" role="group" aria-label="Text size">${SIZES.map(([k, t]) => `<button type="button" data-size="${k}" class="${sz === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
+        $$('[data-look]', p).forEach(x => x.onclick = () => { lookSet('look', x.dataset.look); applyLook(x.dataset.look, document.documentElement.dataset.size); draw(); });
+        $$('[data-size]', p).forEach(x => x.onclick = () => { lookSet('size', x.dataset.size); applyLook(document.documentElement.dataset.look, x.dataset.size); draw(); });
+        $('[data-lx]', p).onclick = () => p.remove(); };
+      draw(); document.body.append(p);
+    };
+  }
   const posOf = id => STAGES.find(s => s.id === id)?.position ?? 0;
   const ivWho = i => i.member?.full_name || i.interviewer?.full_name || '';
   const TZS = ['Asia/Kolkata', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Singapore', 'Australia/Sydney', 'UTC'];
@@ -1912,7 +1959,7 @@
       if (!s) return login();
       state.me = await api.me();
       if (!state.me) return login();
-      shell(); await route();
+      shell(); lookSwitcher(); await route();
       state.unsub?.();
       state.unsub = api.subscribe(() => { clearTimeout(timer); timer = setTimeout(() => {
         if (state.route === 'pipeline') state.redraw?.(); else if (['dashboard', 'candidates'].includes(state.route)) route(); refreshBadge(); }, 400); });

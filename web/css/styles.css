@@ -623,3 +623,35 @@ body.cp-mode .page{max-width:none;padding:18px 20px}
 @media (max-width:860px){.cp-head{grid-template-columns:1fr}.cp-grid,.cp-grid.no-sc,.cp-grid.no-res,.cp-grid.no-res.no-sc{grid-template-columns:1fr}
   .cp-pane{position:relative;top:0;height:auto;max-height:none}.cp-resume{height:70vh!important}}
 .sp .grow,.cp-actions .grow{flex:1}
+
+/* ── look & feel options (picked with "Try a style" on staging) ── */
+:root[data-look="calm"]{--display:"Lexend","Inter",system-ui,sans-serif;--body:"Lexend","Inter",system-ui,sans-serif;
+  --accent:#2F5BD3;--accent-ink:#FFFFFF;--accent-soft:#E6EDFC;--accent-strong:#1F3FA0;--bg:#F3F5FA;--surface-2:#F7F9FD;--ink:#14213D;--ink-2:#33415C;--muted:#5B6782;--line:#E1E6F0;--line-2:#CDD5E4}
+:root[data-look="editorial"]{--display:"Fraunces",Georgia,serif;--body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --accent:#0F766E;--accent-ink:#FFFFFF;--accent-soft:#DDF3EF;--accent-strong:#0B5A54;--bg:#F6F2EC;--surface:#FFFDF9;--surface-2:#FAF6F0;--ink:#2A2420;--ink-2:#4A4038;--muted:#6E6257;--line:#E8E0D5;--line-2:#D9CDBE}
+:root[data-look="editorial"] body{font-size:15.5px}
+:root[data-look="editorial"] h1,:root[data-look="editorial"] h2{letter-spacing:-.01em;font-weight:700}
+:root[data-look="calm"] body{letter-spacing:-.005em}
+@media (prefers-color-scheme: dark){
+  :root[data-look="calm"]:not([data-theme="light"]){--accent:#8FB0FF;--accent-ink:#0B1530;--accent-soft:#1A2544;--accent-strong:#B8CCFF;--bg:#0C111C;--surface:#131A28;--surface-2:#182133;--ink:#E6ECF7;--ink-2:#C3CDE0;--muted:#8E9AB3;--line:#243049;--line-2:#2E3B57}
+  :root[data-look="editorial"]:not([data-theme="light"]){--accent:#5EC9BC;--accent-ink:#06201D;--accent-soft:#12302D;--accent-strong:#8FE0D5;--bg:#14110E;--surface:#1C1814;--surface-2:#221D18;--ink:#EFE8DF;--ink-2:#D3C8BB;--muted:#A3968A;--line:#332B24;--line-2:#3F362E}
+}
+:root[data-theme="dark"][data-look="calm"]{--accent:#8FB0FF;--accent-ink:#0B1530;--accent-soft:#1A2544;--accent-strong:#B8CCFF;--bg:#0C111C;--surface:#131A28;--surface-2:#182133;--ink:#E6ECF7;--ink-2:#C3CDE0;--muted:#8E9AB3;--line:#243049;--line-2:#2E3B57}
+:root[data-theme="dark"][data-look="editorial"]{--accent:#5EC9BC;--accent-ink:#06201D;--accent-soft:#12302D;--accent-strong:#8FE0D5;--bg:#14110E;--surface:#1C1814;--surface-2:#221D18;--ink:#EFE8DF;--ink-2:#D3C8BB;--muted:#A3968A;--line:#332B24;--line-2:#3F362E}
+/* Larger text: scales the page area only, so the sidebar and buttons stay put */
+:root[data-size="large"] .page{zoom:1.1}
+:root[data-size="large"] .drawer-b{zoom:1.08}
+:root[data-size="large"] .cp-pane{height:calc((100vh - 96px) / 1.1);top:calc(76px / 1.1)}
+
+.look-btn{position:fixed;right:18px;bottom:58px;z-index:9998;display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font:inherit;font-weight:600;font-size:13px;box-shadow:var(--shadow-lg);cursor:pointer}
+.look-btn .aa{font-family:var(--display);font-weight:800;font-size:15px;color:var(--accent)}
+.look-panel{position:fixed;right:18px;bottom:104px;z-index:9999;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:auto;display:grid;gap:10px;padding:16px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-lg)}
+.look-opt{display:grid;gap:6px;text-align:left;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;font:inherit}
+.look-opt:hover{border-color:var(--line-2)}
+.look-opt.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.look-top{display:flex;align-items:center;gap:8px}
+.look-n{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--line-2)}
+.look-sw{display:inline-flex;gap:3px;margin-left:auto}.look-sw i{width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.08)}
+.look-cur{font-size:11px;font-weight:700;color:var(--accent-strong);background:var(--accent-soft);padding:1px 7px;border-radius:999px}
+.look-h{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.look-p{font-size:14.5px;line-height:1.6;color:var(--ink-2)}
