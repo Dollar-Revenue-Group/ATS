@@ -693,3 +693,12 @@ body.cp-mode .cp-pane{top:12px;height:calc(100vh - 24px)}
 :root[data-size="large"] body.cp-mode .cp-pane{top:calc(12px / 1.1);height:calc((100vh - 24px) / 1.1)}
 .cp-logo{display:inline-grid;place-items:center;width:44px;height:30px;border-radius:8px;background:var(--side)}
 .cp-logo img{width:44px;height:30px;object-fit:cover;display:block;border-radius:8px}
+/* new-tab button: a tidy square in the card's top-right corner */
+.kcard{position:relative}
+.kcard .top{align-items:flex-start}
+.kcard .top>.ring,.kcard .top>svg{align-self:center}
+.kc-open{position:absolute;top:8px;right:8px;z-index:1;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);line-height:0;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.kc-open svg{display:block}
+.kc-open:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
+.kcard{overflow:hidden}
+.kcard>*{min-width:0}
