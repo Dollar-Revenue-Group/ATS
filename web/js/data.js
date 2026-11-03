@@ -22,6 +22,7 @@
     const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { lock } });
     const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
     let me = null;
+    let liveCh = null; const liveSubs = new Set();
 
     async function callN8n(url, body) {
       if (!url) throw new Error('The n8n webhook URL is not set in config.js yet.');
@@ -55,8 +56,8 @@
       async stages() { return ok(await sb.from('pipeline_stages').select('*').order('position')); },
 
       async jobs() {
-        const jobs = ok(await sb.from('jobs').select('*').order('created_at', { ascending: false }));
-        const apps = ok(await sb.from('applications').select('job_id,stage_id,created_at'));
+        const [jr, ar] = await Promise.all([sb.from('jobs').select('*').order('created_at', { ascending: false }), sb.from('applications').select('job_id,stage_id,created_at')]);
+        const jobs = ok(jr), apps = ok(ar);
         return jobs.map(j => {
           const mine = apps.filter(a => a.job_id === j.id);
           const byStage = {}; mine.forEach(a => byStage[a.stage_id] = (byStage[a.stage_id] || 0) + 1);
@@ -86,9 +87,9 @@
         return res;
       },
       async job(id) {
-        const job = ok(await sb.from('jobs').select('*').eq('id', id).single());
-        const rules = ok(await sb.from('screening_rules').select('*').eq('job_id', id).eq('is_active', true)
-          .order('version', { ascending: false }).limit(1));
+        const [jr, rr] = await Promise.all([sb.from('jobs').select('*').eq('id', id).single(),
+          sb.from('screening_rules').select('*').eq('job_id', id).eq('is_active', true).order('version', { ascending: false }).limit(1)]);
+        const job = ok(jr), rules = ok(rr);
         return { ...job, rules: rules[0] || null };
       },
       async createJob(data) {
@@ -219,11 +220,12 @@
       async saveSetting(key, value) { ok(await sb.from('app_settings').update({ value, updated_at: new Date().toISOString() }).eq('key', key)); },
 
       subscribe(cb) {
-        const ch = sb.channel('ats-live')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, cb)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_screenings' }, cb)
+        liveSubs.add(cb);
+        if (!liveCh) liveCh = sb.channel('ats-live')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, p => liveSubs.forEach(f => { try { f(p); } catch (e) { console.error(e); } }))
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_screenings' }, p => liveSubs.forEach(f => { try { f(p); } catch (e) { console.error(e); } }))
           .subscribe();
-        return () => sb.removeChannel(ch);
+        return () => { liveSubs.delete(cb); };
       },
 
       /* careers page */
@@ -483,5 +485,25 @@
 
   const cfg = window.ATS_CONFIG || {};
   const demo = /[?&]demo\b/.test(location.search) || !cfg.SUPABASE_URL || !window.supabase;
-  window.ATS = { STAGES, ROUND_STAGE, STAGE_ROUND, api: demo ? DemoApi() : LiveApi(cfg) };
+  // Speed: reuse the team, sender and template lists for 60 seconds, and share one request when several parts of a page ask at once.
+  // Any change made in the app (saving a person, sender, template, role or Cal.com connection) clears the cache straight away.
+  function withCache(api) {
+    const TTL = 60000, store = {};
+    const cached = (name, fn) => async (...args) => {
+      const k = name + JSON.stringify(args), hit = store[k];
+      if (hit && Date.now() - hit.t < TTL) return hit.p;
+      const p = fn.apply(api, args); store[k] = { t: Date.now(), p };
+      p.catch(() => { delete store[k]; }); return p;
+    };
+    const clear = () => Object.keys(store).forEach(k => delete store[k]);
+    ['team', 'senders', 'templates', 'profiles'].forEach(n => { if (typeof api[n] === 'function') api[n] = cached(n, api[n]); });
+    Object.keys(api).forEach(n => {
+      if (typeof api[n] !== 'function' || !/^(save|delete|reset|set[A-Z]|connect|disconnect|create|update|invite|remove)/.test(n)) return;
+      const f = api[n]; api[n] = async (...args) => { try { return await f.apply(api, args); } finally { clear(); } };
+    });
+    api.clearCache = clear;
+    window.addEventListener('focus', clear);
+    return api;
+  }
+  window.ATS = { STAGES, ROUND_STAGE, STAGE_ROUND, api: demo ? DemoApi() : withCache(LiveApi(cfg)) };
 })();
