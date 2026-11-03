@@ -219,7 +219,7 @@
         <div class="card"><div class="card-h"><h3>Needs your review</h3><a class="btn sm ghost" href="#/pipeline">Open pipeline →</a></div>
           <div class="list">${review.slice(0, 7).map(c => `
             <div class="li" data-app="${c.id}" tabindex="0">${ring(c.score, c.verdict, 40)}
-              <div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${esc(jobTitle(c.job_id))} · ${ago(c.created_at)}</span></div>${chip(c)}</div>`).join('') || '<div class="empty">Nothing waiting. New applications will appear here once scored.</div>'}</div></div>
+              <div class="grow"><b title="${esc(c.full_name)}">${esc(c.full_name)}</b><span class="small muted">${esc(jobTitle(c.job_id))} · ${ago(c.created_at)}</span></div>${chip(c)}</div>`).join('') || '<div class="empty">Nothing waiting. New applications will appear here once scored.</div>'}</div></div>
         <div style="display:grid;gap:18px;align-content:start">
           <div class="card"><div class="card-h"><h3>Upcoming interviews</h3><a class="btn sm ghost" href="#/interviews">All →</a></div>
             <div class="list">${upcoming.slice(0, 4).map(i => `
@@ -236,6 +236,8 @@
   const bindApps = el => $$('[data-app]', el).forEach(n => { n.onclick = () => openCandidate(n.dataset.app); n.onkeydown = e => e.key === 'Enter' && openCandidate(n.dataset.app); });
 
   /* ───────── jobs ───────── */
+  // Stage accent colours (same palette as the Slack stage cards)
+  const STAGE_HUE = { 1: '#8A8A8A', 2: '#3B82F6', 9: '#14B8A6', 3: '#22C55E', 4: '#16A34A', 8: '#8B5CF6', 10: '#A855F7', 11: '#D946EF', 5: '#C9CF1F', 6: '#1BDF4D', 7: '#E5484D' };
   const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#3B82C4', '#178A35', '#3FA62E', '#5DBB2C', '#8FBF1F', '#B5C91A', '#B4720E', '#1C8B57'];
   async function jobsPage(el, _a, params) {
     const jobs = state.jobs = await api.jobs();
@@ -689,10 +691,18 @@
     const job = jobs.find(j => j.id === jobId);
     const roundsN = (job?.rounds || []).length;
     let filter = params.get('v') || 'all', sort = 'score';
+    // Board layout per viewer: column widths, default width and collapsed columns (kept in this browser)
+    const BV_KEY = 'ats.board.v1';
+    let bv = { def: 270, w: {}, collapsed: [] };
+    try { bv = Object.assign(bv, JSON.parse(localStorage.getItem(BV_KEY) || '{}')); } catch (e) { /* defaults */ }
+    const saveBv = () => { try { localStorage.setItem(BV_KEY, JSON.stringify(bv)); } catch (e) { /* storage off */ } };
+    const colW = id => Math.max(180, Math.min(620, bv.w[id] || bv.def));
     el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Blue cards</span> have an interview booked.</p></div>
       <div class="board-tools"><button class="btn sm" id="copylinks" aria-haspopup="menu">${icon('cal', 15)}Copy booking link ▾</button><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
         <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-        <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="iscore">Interview score</button><button data-s="new">Newest</button></div></div></div>
+        <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="iscore">Interview score</button><button data-s="new">Newest</button></div>
+        <div class="seg" role="group" aria-label="Column width" title="Column width (or drag the ⇔ handle between columns)"><button data-bw="210">S</button><button data-bw="270">M</button><button data-bw="340">L</button></div>
+        <div class="seg" role="group" aria-label="Move around the board"><button id="bpl" title="Scroll left" aria-label="Scroll the board left"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button><button id="bpan" title="Pan tool: drag anywhere on the board to move left and right" aria-pressed="false"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/></svg>Pan</button><button id="bpr" title="Scroll right" aria-label="Scroll the board right"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button></div></div></div>
       <div class="board" id="board"></div>`;
     $('#jobsel').onchange = e => location.hash = `#/pipeline/${e.target.value}`;
     let team = []; try { team = await api.team(); } catch (e) { team = []; }
@@ -703,13 +713,25 @@
       cards.sort(sort === 'score' ? (a, b) => (b.score ?? -1) - (a.score ?? -1) : sort === 'iscore' ? (a, b) => (b.iscore ?? -1) - (a.iscore ?? -1) || (b.score ?? -1) - (a.score ?? -1) : (a, b) => b.created_at.localeCompare(a.created_at));
       const scfg = scoringCfg(job);
       const cols = STAGES.filter(s => !STAGE_ROUND[s.id] || STAGE_ROUND[s.id] <= Math.max(roundsN, 1) || cards.some(c => c.stage_id === s.id));
-      $('#board').innerHTML = cols.map(s => { const list = cards.filter(c => c.stage_id === s.id);
+      $('#board').innerHTML = cols.map((s, ci) => { const list = cards.filter(c => c.stage_id === s.id);
         const rd = STAGE_ROUND[s.id] ? job?.rounds?.[STAGE_ROUND[s.id] - 1] : null;
-        return `<section class="col" data-stage="${s.id}" aria-label="${s.name}"><div class="col-h"><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span><span class="row" style="gap:6px;flex-wrap:nowrap">${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
-          <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="true" data-card="${c.id}" tabindex="0">
-            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div><a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
+        const shut = bv.collapsed.includes(s.id);
+        if (shut) return `<section class="col shut" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'}"><button class="col-open" data-coltog="${s.id}" title="Show ${esc(s.name)}" aria-label="Show ${esc(s.name)}"><span class="col-dot"></span><span class="n">${list.length}</span><span class="col-vt">${esc(s.name)}</span></button></section>${ci < cols.length - 1 ? '<div class="col-gap"></div>' : ''}`;
+        return `<section class="col" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'};width:${colW(s.id)}px"><div class="col-h"><span class="col-t"><span class="col-dot"></span><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="col-copy" data-coltog="${s.id}" title="Collapse ${esc(s.name)}" aria-label="Collapse ${esc(s.name)}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4 6 8l4 4"/></svg></button>${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
+          <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="${bv.pan ? 'false' : 'true'}" data-card="${c.id}" tabindex="0">
+            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b title="${esc(c.full_name)}">${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div><a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
             ${c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
-          </article>`).join('') || '<div class="small muted" style="padding:10px 4px">No one here yet</div>'}</div></section>`; }).join('');
+          </article>`).join('') || '<div class="col-empty">Drop a candidate here</div>'}</div></section>${ci < cols.length - 1 ? `<div class="col-rs" data-rs="${s.id}" role="separator" aria-orientation="vertical" aria-label="Resize ${esc(s.name)}" tabindex="0" title="Drag to widen or narrow ${esc(s.name)} · double-click to reset"><span class="col-grip"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4 1 8l4 4M11 4l4 4-4 4"/></svg></span></div>` : ''}`; }).join('');
+      // Resize: drag the ⇔ handle to the right of a column (arrow keys work too); double-click resets it
+      $$('[data-rs]').forEach(h => { const id = +h.dataset.rs, col = h.previousElementSibling;
+        const setW = w => { w = Math.max(180, Math.min(620, Math.round(w))); col.style.width = w + 'px'; bv.w[id] = w; };
+        h.onpointerdown = e => { e.preventDefault(); const x0 = e.clientX, w0 = col.getBoundingClientRect().width; h.setPointerCapture(e.pointerId); document.body.classList.add('col-resizing');
+          h.onpointermove = m => setW(w0 + m.clientX - x0);
+          h.onpointerup = h.onpointercancel = () => { h.onpointermove = h.onpointerup = h.onpointercancel = null; document.body.classList.remove('col-resizing'); saveBv(); }; };
+        h.onkeydown = e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setW(col.getBoundingClientRect().width + (e.key === 'ArrowRight' ? 20 : -20)); saveBv(); };
+        h.ondblclick = () => { delete bv.w[id]; col.style.width = colW(id) + 'px'; saveBv(); }; });
+      $$('[data-coltog]').forEach(b => b.onclick = e => { e.stopPropagation(); const id = +b.dataset.coltog;
+        bv.collapsed = bv.collapsed.includes(id) ? bv.collapsed.filter(x => x !== id) : [...bv.collapsed, id]; saveBv(); draw(); });
       $$('[data-colcopy]').forEach(b => b.onclick = e => { e.stopPropagation(); const n = +b.dataset.colcopy; copyLink(roundLink(job, n, team)?.url, `Round ${n} booking link`); });
       $$('[data-card]').forEach(k => {
         k.onclick = e => { if (e.target.closest('.kc-open')) return; if (e.metaKey || e.ctrlKey) return openProfileTab(k.dataset.card); openCandidate(k.dataset.card); };
@@ -734,7 +756,37 @@
     };
     $$('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; $$('[data-f]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
     $$('[data-s]').forEach(b => b.onclick = () => { sort = b.dataset.s; $$('[data-s]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
-    await draw();
+    const markBw = () => $$('[data-bw]').forEach(x => x.classList.toggle('on', +x.dataset.bw === bv.def && !Object.keys(bv.w).length));
+    $$('[data-bw]').forEach(b => b.onclick = () => { bv.def = +b.dataset.bw; bv.w = {}; saveBv(); markBw(); draw(); });
+    markBw();
+    // Pan: drag empty board space (or anywhere, with the Pan tool on) to move left and right; arrows jump one column
+    const board = $('#board');
+    const markPan = () => { const b = $('#bpan'); b.classList.toggle('on', !!bv.pan); b.setAttribute('aria-pressed', String(!!bv.pan)); board.classList.toggle('panmode', !!bv.pan); };
+    $('#bpan').onclick = () => { bv.pan = !bv.pan; saveBv(); markPan(); draw(); };
+    const step = dir => board.scrollBy({ left: dir * Math.max(240, (board.querySelector('.col:not(.shut)')?.getBoundingClientRect().width || 270) + 16), behavior: 'smooth' });
+    $('#bpl').onclick = () => step(-1); $('#bpr').onclick = () => step(1);
+    const arrows = () => { $('#bpl').disabled = board.scrollLeft <= 2; $('#bpr').disabled = board.scrollLeft >= board.scrollWidth - board.clientWidth - 2; };
+    board.addEventListener('scroll', arrows, { passive: true }); new ResizeObserver(arrows).observe(board);
+    let pan = null, moved = false;
+    board.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || e.pointerType === 'touch') return;
+      const t = e.target;
+      if (t.closest('button,a,input,select,textarea,.col-rs,[data-rs]')) return;
+      if (!bv.pan && t.closest('.kcard')) return;            // normal mode: cards keep drag-and-drop
+      pan = { x: e.clientX, sl: board.scrollLeft, id: e.pointerId }; moved = false;
+    });
+    window.addEventListener('pointermove', e => { if (!pan || e.pointerId !== pan.id) return;
+      const dx = e.clientX - pan.x;
+      if (!moved && Math.abs(dx) < 4) return;
+      if (!moved) { moved = true; board.classList.add('panning'); try { board.setPointerCapture(pan.id); } catch (er) { /* fine */ } }
+      board.scrollLeft = pan.sl - dx; e.preventDefault(); });
+    const endPan = () => { if (!pan) return; pan = null; board.classList.remove('panning'); };
+    window.addEventListener('pointerup', endPan); window.addEventListener('pointercancel', endPan);
+    board.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);   // a pan is not a click
+    // Mouse wheel over the column headers moves the board sideways
+    board.addEventListener('wheel', e => { if (!e.target.closest('.col-h,.col-open') || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; board.scrollLeft += e.deltaY; e.preventDefault(); }, { passive: false });
+    markPan();
+    await draw(); arrows();
     state.redraw = draw;
   }
 
