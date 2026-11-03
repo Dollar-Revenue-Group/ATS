@@ -1050,6 +1050,9 @@
       const avg = xs.length ? xs.reduce((t, x) => t + +x.score, 0) / xs.length : null;
       const keepScroll = $('.cp-main', el)?.scrollTop || 0;
       el.innerHTML = `<div class="cp">
+        <div class="cp-bar"><span class="cp-brand"><span class="cp-logo"><img src="assets/drg-logo.svg" alt="DRG"></span><span>DRG ATS · Candidate</span></span><span class="grow"></span>
+          <a class="btn sm ghost" href="#/pipeline/${esc(a.job_id || a.jobs?.id || '')}" title="Go to this job's pipeline in this tab">${icon('board', 15)}Pipeline</a>
+          <button class="btn sm" id="cpclose" title="Close this tab">${icon('x', 15)}Close tab</button></div>
         <header class="cp-head">
           <div class="cp-id">${avatar(name, 56)}<div class="cp-who"><h1>${esc(name)}</h1>
             <div class="cp-sub">${esc(a.jobs?.title || '')}${a.jobs?.client ? ` <span class="chip ext">${esc(a.jobs.client)}</span>` : ''} · <b>${stageName(a.stage_id)}</b> · applied ${fmtDate(a.created_at)}</div>
@@ -1067,6 +1070,7 @@
           <aside class="cp-pane cp-scoring" ${showScore ? '' : 'hidden'} aria-label="Interview scoring"><div class="cp-pane-h"><b>${icon('check', 15)}Interview scoring</b><button class="x" id="xsc" aria-label="Hide scoring" title="Hide scoring">${icon('x', 16)}</button></div><div class="cp-pane-b" id="scbody"></div></aside>
         </div></div>`;
       $('.cp-main', el).scrollTop = keepScroll;
+      $('#cpclose', el).onclick = () => { window.close(); setTimeout(() => { if (!window.closed) location.hash = `#/pipeline/${a.job_id || ''}`; }, 150); };
       const setRes = v => { showResume = v; setPref('cp.resume', v ? '1' : '0'); render(); };
       const setSc = v => { showScore = v; setPref('cp.score', v ? '1' : '0'); render(); };
       $('#tgres', el).onclick = () => setRes(!showResume); $('#xres', el).onclick = () => setRes(false);
