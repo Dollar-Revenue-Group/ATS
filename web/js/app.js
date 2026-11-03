@@ -1223,14 +1223,14 @@
           ${c.hint ? `<div class="small muted">${esc(c.hint)}</div>` : ''}
           <div class="sp-rate" role="radiogroup" aria-label="${esc(c.name)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" data-k="${c.key}" data-n="${n}" title="${RATE_WORDS[n]}">${n}</button>`).join('')}<span class="sp-word" data-word="${c.key}"></span></div></div>`).join('')}</div>
         <div class="field"><label for="spn">Notes</label><textarea class="input" id="spn" rows="4" placeholder="Strengths, concerns, what the next interviewer should probe.">${esc(ex?.notes || '')}</textarea></div>
-        <div class="field"><label>Recommendation</label><div class="seg sp-rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+        <div class="field"><label>Recommendation</label><div class="seg sp-rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['hold', 'Hold'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
         <div class="sp-result" id="spres" aria-live="polite"></div>
         <div class="row" style="gap:8px">${ex ? '<button type="button" class="btn danger sm" id="spdel">Delete</button>' : ''}<span class="grow"></span><button type="submit" class="btn primary" id="spgo">${ex ? 'Save changes' : 'Save score'}</button></div>
       </form>
       ${iscores.length ? `<div class="sp-past"><div class="eyebrow">Scorecards (${iscores.length})</div>${iscores.map(x => `<div class="sp-card ${ex && ex.id === x.id ? 'on' : ''}"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:nowrap"><div style="min-width:0"><b>${esc(x.scorer_name || 'Interviewer')}</b><div class="small muted">Round ${x.round_no || '–'} · ${fmtDate(x.updated_at || x.created_at)}${x.recommendation ? ' · ' + x.recommendation.replace('_', ' ') : ''}</div></div>
           ${iscoreBadge(x.score, x.verdict, false, IVERDICT[x.verdict]?.[0] || '')}</div>${x.notes ? `<div class="quote">${esc(x.notes)}</div>` : ''}${mine(x) && !(ex && ex.id === x.id) ? `<button type="button" class="linkbtn small" data-spedit="${x.id}">Edit</button>` : ''}</div>`).join('')}</div>` : ''}`;
     const dirty = () => { host.dataset.dirty = '1'; };
-    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? null : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
+    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? 'hold' : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
     const paint = () => { let r; try { r = computeScore(cfg, ratings); } catch (e) { r = { score: null, err: e.message, flags: [], missing: [] }; }
       $$('[data-k]', host).forEach(b => { const on = ratings[b.dataset.k] === +b.dataset.n; b.classList.toggle('on', on); b.classList.toggle('lit', ratings[b.dataset.k] >= +b.dataset.n); b.setAttribute('aria-checked', on); });
       $$('[data-word]', host).forEach(w => w.textContent = RATE_WORDS[ratings[w.dataset.word]] || '');
@@ -1330,7 +1330,7 @@
     let rating = 0;
     const m = modal('Interview scorecard', `
       <div class="field"><label>Overall rating</label><div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>
-      <div class="field"><label for="rec">Recommendation</label><div class="seg" id="rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label for="rec">Recommendation</label><div class="seg" id="rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['hold', 'Hold'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
       <div class="field"><label for="fb">Feedback</label><textarea class="input" id="fb" placeholder="Strengths, concerns, and anything the next interviewer should probe."></textarea></div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Submit scorecard</button>`);
     let rec = null;
@@ -1499,11 +1499,11 @@
       <div class="is-list">${cfg.criteria.map(c => `<div class="is-row"><div class="is-name"><b>${esc(c.name)}</b>${c.min ? `<span class="tag">needs ${c.min}+</span>` : ''}${cfg.mode === 'weighted' ? `<span class="small muted">${Math.round(c.weight / cfg.criteria.reduce((t, x) => t + x.weight, 0) * 100)}%</span>` : ''}${c.hint ? `<span class="small muted" style="display:block">${esc(c.hint)}</span>` : ''}</div>
         <div class="rate" role="radiogroup" aria-label="${esc(c.name)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" data-k="${c.key}" data-n="${n}" title="${RATE_WORDS[n]}"><b>${n}</b><span>${RATE_WORDS[n]}</span></button>`).join('')}</div></div>`).join('')}</div>
       <div class="field"><label for="isn">Notes</label><textarea class="input" id="isn" rows="3" placeholder="Why these scores? Strengths, concerns, anything the next interviewer should probe.">${esc(ex?.notes || '')}</textarea></div>
-      <div class="field"><label>Your recommendation</label><div class="seg" id="isrec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label>Your recommendation</label><div class="seg" id="isrec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['hold', 'Hold'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
       <div class="is-result" id="isres" aria-live="polite"></div>`,
       `${ex ? '<button class="btn danger" id="isdel" style="margin-right:auto">Delete</button>' : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">${ex ? 'Save changes' : 'Save score'}</button>`);
     m.el.querySelector('.modal').classList.add('wide');
-    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? null : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
+    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? 'hold' : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
     const paint = () => { let r; try { r = computeScore(cfg, ratings); } catch (e) { r = { score: null, err: e.message, flags: [], missing: [] }; }
       $$('[data-k]', m.el).forEach(b => { const on = ratings[b.dataset.k] === +b.dataset.n; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
       if (!recTouched) rec = recFor(r);

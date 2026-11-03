@@ -728,3 +728,5 @@ body.cp-dragging iframe{pointer-events:none}
 .pv-page{display:block;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35);border-radius:2px}
 .cp-resume .cp-pane-b{overflow:hidden;display:flex;flex-direction:column}
 .cp-resume .cp-pane-b>.cp-text,.cp-resume .cp-pane-b>.empty,.cp-resume .cp-pane-b>.viewer-img{overflow:auto}
+body.cp-mode .look-btn{right:auto;left:18px;bottom:18px}body.cp-mode .look-panel{right:auto;left:18px;bottom:64px}
+.sp-rec button{padding:7px 4px;white-space:nowrap;font-size:12px}
