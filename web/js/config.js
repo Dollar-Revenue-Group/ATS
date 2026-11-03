@@ -16,6 +16,7 @@
     N8N_BOOK_URL: hook('ats/book'),             // Workflow 11 · book a time (POST)
     CALCOM_CREATE_URL: hook('ats/calcom-create-link-test'), // Workflow 15 · creates a round's Cal.com link
     CALCOM_CONNECT_URL: hook('ats/calcom-connect'),        // Workflow 16 · connects an interviewer's Cal.com
+    N8N_QUESTIONS_URL: hook('ats/interview-questions'),    // Workflow 17 · AI interview questions for a candidate
     CAREERS_URL: 'https://careers.dollarrevenuegroup.com' // public careers site
   };
   // Staging branch deploys (staging--drg-ats.netlify.app) and local copies show a label so nobody mistakes them for the live site.

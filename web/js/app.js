@@ -4,6 +4,66 @@
   const STAGES = ATS.STAGES;
   const { ROUND_STAGE, STAGE_ROUND } = ATS;
   const CFG = window.ATS_CONFIG || {};
+  /* ───────── appearance: fonts, colours, text size (Settings → Appearance) ───────── */
+  // Saved per person in this browser
+  const FONTS = [
+    { k: 'brand', name: 'Montserrat', tag: 'DRG brand font · default', head: "'Montserrat'", body: "'Montserrat'", g: null },
+    { k: 'modern', name: 'Inter + Plus Jakarta Sans', tag: 'Clean and sharp', head: "'Plus Jakarta Sans'", body: "'Inter'", g: 'Plus+Jakarta+Sans:wght@500;600;700;800' },
+    { k: 'lexend', name: 'Lexend', tag: 'Designed for easy reading', head: "'Lexend'", body: "'Lexend'", g: 'Lexend:wght@400;500;600;700' },
+    { k: 'atkinson', name: 'Atkinson Hyperlegible', tag: 'Very clear letters, great for long reading', head: "'Atkinson Hyperlegible'", body: "'Atkinson Hyperlegible'", g: 'Atkinson+Hyperlegible:wght@400;700' },
+    { k: 'dmsans', name: 'DM Sans', tag: 'Soft and friendly', head: "'DM Sans'", body: "'DM Sans'", g: 'DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700' },
+    { k: 'manrope', name: 'Manrope', tag: 'Modern and roomy', head: "'Manrope'", body: "'Manrope'", g: 'Manrope:wght@400;500;600;700;800' },
+    { k: 'nunito', name: 'Nunito Sans', tag: 'Rounded and warm', head: "'Nunito Sans'", body: "'Nunito Sans'", g: 'Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800' },
+    { k: 'poppins', name: 'Poppins', tag: 'Bold and geometric', head: "'Poppins'", body: "'Poppins'", g: 'Poppins:wght@400;500;600;700' },
+    { k: 'worksans', name: 'Work Sans', tag: 'Plain and practical', head: "'Work Sans'", body: "'Work Sans'", g: 'Work+Sans:wght@400;500;600;700' },
+    { k: 'plex', name: 'IBM Plex Sans', tag: 'Technical and precise', head: "'IBM Plex Sans'", body: "'IBM Plex Sans'", g: 'IBM+Plex+Sans:wght@400;500;600;700' },
+    { k: 'sourcesans', name: 'Source Sans 3', tag: 'Classic and compact', head: "'Source Sans 3'", body: "'Source Sans 3'", g: 'Source+Sans+3:wght@400;500;600;700' },
+    { k: 'editorial', name: 'Fraunces + Source Sans 3', tag: 'Magazine-style serif headings', head: "'Fraunces'", body: "'Source Sans 3'", g: 'Fraunces:opsz,wght@9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700' },
+    { k: 'merri', name: 'Merriweather + Open Sans', tag: 'Traditional serif headings', head: "'Merriweather'", body: "'Open Sans'", g: 'Merriweather:wght@700&family=Open+Sans:wght@400;500;600;700' }
+  ];
+  const COLOURS = [
+    { k: 'brand', name: 'DRG brand · black, Malachite, Lime', sw: ['#191919', '#1BDF4D', '#D9E021'] }, { k: 'green', name: 'Classic green', sw: ['#178A35', '#E2F4E3'] }, { k: 'blue', name: 'Calm blue', sw: ['#2F5BD3', '#E6EDFC'] },
+    { k: 'teal', name: 'Deep teal · warm paper', sw: ['#0F766E', '#F6F2EC'] }, { k: 'violet', name: 'Violet', sw: ['#6D4AE0', '#EEE9FD'] }, { k: 'slate', name: 'Slate', sw: ['#334155', '#EEF1F5'] }
+  ];
+  const SIZES = [['normal', 'Normal'], ['large', 'Larger'], ['xl', 'Largest']];
+  const lookPref = k => { try { return localStorage.getItem('ats.' + k); } catch (e) { return null; } };
+  const lookSet = (k, v) => { try { localStorage.setItem('ats.' + k, v); } catch (e) { /* private mode */ } };
+  function loadFont(f) {
+    if (!f || !f.g || document.getElementById('font-' + f.k)) return;
+    const ln = document.createElement('link'); ln.id = 'font-' + f.k; ln.rel = 'stylesheet';
+    ln.href = `https://fonts.googleapis.com/css2?family=${f.g}&display=swap`; document.head.append(ln);
+  }
+  function applyLook() {
+    // Older saved choices from the "Try a style" button
+    const old = lookPref('look'); if (old && !lookPref('font')) { lookSet('font', old === 'calm' ? 'lexend' : old === 'editorial' ? 'editorial' : 'modern'); lookSet('colour', old === 'calm' ? 'blue' : old === 'editorial' ? 'teal' : 'green'); }
+    const f = FONTS.find(x => x.k === lookPref('font')) || FONTS[0]; loadFont(f);
+    const r = document.documentElement;
+    r.style.setProperty('--display', `${f.head},"Inter",Arial,system-ui,sans-serif`); r.style.setProperty('--body', `${f.body},"Inter",Arial,system-ui,sans-serif`);
+    r.dataset.font = f.k;
+    r.dataset.colour = (COLOURS.find(x => x.k === lookPref('colour')) || COLOURS[0]).k;
+    const sz = lookPref('size'); r.dataset.size = SIZES.some(s => s[0] === sz) ? sz : 'normal';
+  }
+  applyLook();
+  function appearanceSettings(sb) {
+    FONTS.forEach(loadFont);
+    const draw = () => { const r = document.documentElement, cf = r.dataset.font, cc = r.dataset.colour, cs = r.dataset.size;
+      sb.innerHTML = `<div class="card"><div class="card-h"><div><h3>Appearance</h3><div class="small muted">Pick the font, colours and text size you find easiest to read. Changes apply straight away, only for you, in this browser.</div></div>
+          <button class="btn sm" id="lkreset">Reset to default</button></div>
+        <div class="card-b" style="display:grid;gap:22px">
+          <div class="ap-sec"><div class="eyebrow">Font</div><div class="ap-fonts">${FONTS.map(f => `<button type="button" class="ap-font ${cf === f.k ? 'on' : ''}" data-font="${f.k}" aria-pressed="${cf === f.k}">
+              <span class="ap-h" style="font-family:${f.head},sans-serif">Diya Shah · SDR</span>
+              <span class="ap-p" style="font-family:${f.body},sans-serif">Strong outbound experience with clear numbers and the CRM skills the role needs.</span>
+              <span class="ap-n"><b>${esc(f.name)}</b>${cf === f.k ? '<span class="look-cur">In use</span>' : ''}<span class="small muted" style="display:block">${esc(f.tag)}</span></span></button>`).join('')}</div></div>
+          <div class="ap-sec"><div class="eyebrow">Colours</div><div class="ap-cols">${COLOURS.map(c => `<button type="button" class="ap-col ${cc === c.k ? 'on' : ''}" data-colour="${c.k}" aria-pressed="${cc === c.k}"><span class="look-sw">${c.sw.map(x => `<i style="background:${x}"></i>`).join('')}</span>${esc(c.name)}</button>`).join('')}</div></div>
+          <div class="ap-sec"><div class="eyebrow">Text size</div><div class="seg" role="group" aria-label="Text size">${SIZES.map(([k, t]) => `<button type="button" data-size="${k}" class="${cs === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+        </div></div>`;
+      $$('[data-font]', sb).forEach(b => b.onclick = () => { lookSet('font', b.dataset.font); applyLook(); draw(); });
+      $$('[data-colour]', sb).forEach(b => b.onclick = () => { lookSet('colour', b.dataset.colour); applyLook(); draw(); });
+      $$('[data-size]', sb).forEach(b => b.onclick = () => { lookSet('size', b.dataset.size); applyLook(); draw(); });
+      $('#lkreset', sb).onclick = () => { ['font', 'colour', 'size', 'look'].forEach(k => lookSet(k, '')); applyLook(); draw(); toast('Back to the default look'); };
+    };
+    draw();
+  }
   const posOf = id => STAGES.find(s => s.id === id)?.position ?? 0;
   const ivWho = i => i.member?.full_name || i.interviewer?.full_name || '';
   const TZS = ['Asia/Kolkata', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Singapore', 'Australia/Sydney', 'UTC'];
@@ -109,14 +169,15 @@
     const [page, arg] = path.split('/');
     const params = new URLSearchParams(qs || '');
     state.route = page;
-    $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === (page === 'candidate' ? 'candidates' : page)));
+    $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === (page === 'candidate' ? 'candidates' : page === 'profile' ? 'pipeline' : page)));
+    if (page !== 'profile') { document.body.classList.remove('cp-mode'); document.title = 'DRG ATS'; }
     $('#side')?.classList.remove('open');
     $$('.scrim').forEach(x => x.remove());
     const el = $('#page'); el.innerHTML = `<div class="empty"><span class="spin"></span></div>`;
     const run = state.run = (state.run || 0) + 1;
     try {
       const candidateLink = async (e, id, p) => { await candidates(e, null, p); if (id) openCandidate(id); };
-      const fn = { dashboard, jobs: arg ? jobDetail : jobsPage, pipeline, candidates, candidate: candidateLink, upload, interviews, settings }[page] || dashboard;
+      const fn = { dashboard, jobs: arg ? jobDetail : jobsPage, pipeline, candidates, candidate: candidateLink, profile: (e, id, p) => candidatePage(e, id, p), upload, interviews, settings }[page] || dashboard;
       await fn(el, arg, params);
     } catch (e) { if (run !== state.run) return; el.innerHTML = `<div class="card empty">Could not load this page. ${esc(e.message)}</div>`; console.error(e); }
     refreshBadge();
@@ -201,7 +262,11 @@
     try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { fail(e); }
     try { senders = (await api.senders()).filter(x => x.active !== false || x.id === job?.sender_id); } catch (e) { senders = []; }
     const defSender = senders.find(x => x.is_default);
+    const WZ = [['basics', 'Basics', 'Title, client, sender, location'], ['jd', 'Job description', 'What candidates read'], ['panel', 'Panel & rounds', 'Who interviews, in which round'],
+      ['scoring', 'Interview scoring', 'What interviewers rate'], ['emails', 'Candidate emails', 'Default or custom wording']];
     const m = modal(job ? 'Edit job' : 'New job', `
+      <ol class="wz-nav" role="tablist">${WZ.map(([k, l, d], i) => `<li><button type="button" role="tab" data-wz="${i}"><i>${i + 1}</i><span><b>${l}</b><small>${d}</small></span></button></li>`).join('')}</ol>
+      <section class="wz-step" data-step="0"><div class="wz-h"><h3>Basics</h3><p class="small muted">The essentials candidates see on the careers site.</p></div>
       <div class="grid2" style="align-items:start"><div class="field"><label for="jt">Job title</label><input class="input" id="jt" required value="${esc(job?.title)}" placeholder="e.g. Sales Development Representative"></div>
         <div class="field"><label for="jc">Hiring for</label><input class="input" id="jc" value="${esc(job?.client)}" placeholder="Dollar Revenue Group" list="jclients"><datalist id="jclients"><option value="TechJays"></option></datalist>
           <div class="small muted">Leave blank for DRG. A client name is added to every interview's calendar title, e.g. "SDR (TechJays) · Intro call · Priya".</div></div></div>
@@ -210,25 +275,48 @@
       <div class="grid2"><div class="field"><label for="jd2">Department</label><input class="input" id="jd2" value="${esc(job?.department)}" placeholder="Sales"></div>
         <div class="field"><label for="jl">Location</label><input class="input" id="jl" value="${esc(job?.location)}" placeholder="Ahmedabad · Hybrid"></div></div>
       <div class="grid2"><div class="field"><label for="je">Employment type</label><select class="input" id="je">${['Full-time', 'Part-time', 'Contract', 'Internship'].map(t => `<option ${job?.employment_type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-        <div class="field"><label for="jo">Openings</label><input class="input" id="jo" type="number" min="1" value="${job?.openings || 1}"></div></div>
-      <div class="field"><label for="jx">Job description</label><textarea class="input" id="jx" rows="7" placeholder="Paste the JD. Candidates see it on the careers site and the AI reads it when screening.">${esc(job?.jd_text)}</textarea></div>
-      <div class="modal-sec"><h3>Interview scoring</h3></div>
+        <div class="field"><label for="jo">Openings</label><input class="input" id="jo" type="number" min="1" value="${job?.openings || 1}"></div></div></section>
+      <section class="wz-step" data-step="1" hidden><div class="wz-h"><h3>Job description</h3><p class="small muted">Paste the full JD. Candidates read it on the careers site and the AI uses it when screening resumes.</p></div>
+      <div class="field"><label for="jx">Job description</label><textarea class="input" id="jx" rows="16" placeholder="Paste the JD. Candidates see it on the careers site and the AI reads it when screening.">${esc(job?.jd_text)}</textarea></div>
+</section>
+      <section class="wz-step" data-step="3" hidden><div class="wz-h"><h3>Interview scoring</h3><p class="small muted">Interviewers rate each point from 1 to 5 on the candidate's page.</p></div>
       <div class="field"><div class="small muted">The points interviewers rate from 1 to 5 on a candidate's profile. Click to add or remove. Weights and the scoring formula are on the job's <b>Interview scoring</b> tab.</div>
         <div class="row" id="jsc" style="gap:6px;margin-top:4px"></div>
-        <div class="row" style="gap:8px"><input class="input" id="jscn" placeholder="Add your own point, e.g. Objection handling" style="max-width:340px"><button type="button" class="btn sm" id="jsca">Add</button></div></div>
-      <div class="modal-sec"><h3>Hiring panel and rounds</h3></div><div id="jpr" style="display:grid;gap:14px"></div>`,
-      `<button class="btn" data-close>Cancel</button><button class="btn primary" id="save">${job ? 'Save changes' : 'Create job'}</button>`);
-    m.el.querySelector('.modal').classList.add('wide');
+        <div class="row" style="gap:8px"><input class="input" id="jscn" placeholder="Add your own point, e.g. Objection handling" style="max-width:340px"><button type="button" class="btn sm" id="jsca">Add</button></div></div></section>
+      <section class="wz-step" data-step="2" hidden><div class="wz-h"><h3>Panel & rounds</h3><p class="small muted">Pick the hiring panel and one interviewer per round. Candidates book with that round's interviewer.</p></div><div id="jpr" style="display:grid;gap:14px"></div></section>
+      <section class="wz-step" data-step="4" hidden><div class="wz-h"><h3>Candidate emails</h3><p class="small muted">Keep the defaults or write this job's own version of any email.</p></div>
+      ${senders.length ? `<div class="field jt-sender"><label for="jsn2">Send emails from</label><select class="input" id="jsn2">${senders.map(x => `<option value="${x.id}" ${x.id === (job?.sender_id || defSender?.id) ? 'selected' : ''}>${esc(senderLabel(x))}</option>`).join('')}</select>
+        <div class="small muted" id="jsnh2"></div></div>` : ''}
+      <div class="field" id="jtpl"><div class="small muted"><span class="spin"></span> Loading email templates…</div></div></section>`,
+      `<button class="btn" id="wzback" style="margin-right:auto">← Back</button><button class="btn" data-close>Cancel</button>${job ? '<button class="btn" id="save">Save changes</button>' : ''}<button class="btn primary" id="wznext">Next →</button>${job ? '' : '<button class="btn primary" id="save" hidden>Create job</button>'}`);
+    m.el.querySelector('.modal').classList.add('wide', 'wz');
+    let step = 0;
+    const goStep = n => { if (n > 0 && !$('#jt', m.el).value.trim()) { n = 0; toast('Add a job title first.', true); $('#jt', m.el).focus(); }
+      step = Math.max(0, Math.min(WZ.length - 1, n));
+      $$('.wz-step', m.el).forEach(x => x.hidden = +x.dataset.step !== step);
+      $$('[data-wz]', m.el).forEach(b => { const i = +b.dataset.wz; b.classList.toggle('on', i === step); b.classList.toggle('done', i < step); b.setAttribute('aria-selected', i === step); });
+      $('#wzback', m.el).style.visibility = step ? 'visible' : 'hidden';
+      const last = step === WZ.length - 1; $('#wznext', m.el).hidden = last;
+      if (!job) $('#save', m.el).hidden = !last;
+      m.el.querySelector('.modal-b').scrollTop = 0; };
+    $$('[data-wz]', m.el).forEach(b => b.onclick = () => goStep(+b.dataset.wz));
+    $('#wznext', m.el).onclick = () => goStep(step + 1);
+    $('#wzback', m.el).onclick = () => goStep(step - 1);
+    goStep(0);
     const sn = $('#jsn', m.el), snh = $('#jsnh', m.el);
     const snNote = () => { if (!sn) return; const x = senders.find(y => y.id === sn.value) || defSender || {};
       snh.innerHTML = x.from_email ? `Candidates see <b>${esc(x.from_name)}</b> &lt;${esc(x.from_email)}&gt;. Every email for this job (applied, rounds, confirmations, reminders) comes from here. You can also change it, and each email's wording, on the job's Emails tab.`
         : `Candidates see <b>${esc(x.from_name || 'DRG Talent Team')}</b> from the DRG hiring mailbox.`; };
-    if (sn) { sn.onchange = snNote; snNote(); }
+    // The sender can be picked on Basics or on Candidate emails; both stay in step
+    const sn2 = $('#jsn2', m.el), snh2 = $('#jsnh2', m.el);
+    const syncSender = from => { if (!sn || !sn2) return; if (from === sn2) sn.value = sn2.value; else sn2.value = sn.value; snNote(); if (snh2) snh2.innerHTML = snh.innerHTML; };
+    if (sn) { sn.onchange = () => syncSender(sn); syncSender(sn); }
+    if (sn2) sn2.onchange = () => syncSender(sn2);
     const jc = $('#jc', m.el);
     // Typing a client name picks that client's sender if there is exactly one match (e.g. TechJays → zaina@techjays.com)
     if (jc && sn && !job?.sender_id) jc.onchange = () => { const c = jc.value.trim().toLowerCase(); if (!c) return;
       const hits = senders.filter(x => x.from_email && (x.from_email.split('@')[1] || '').toLowerCase().startsWith(c.replace(/\s+/g, '')));
-      if (hits.length === 1) { sn.value = hits[0].id; snNote(); } };
+      if (hits.length === 1) { sn.value = hits[0].id; syncSender(sn); } };
     const scfg = scoringCfg(job); const crit = scfg.criteria.map(c => ({ ...c })); const crit0 = JSON.stringify(crit);
     const drawCrit = () => { const on = crit.map(c => c.name.toLowerCase());
       $('#jsc', m.el).innerHTML = crit.map((c, i) => `<button type="button" class="pick-chip on" data-cx="${i}" title="Remove">${esc(c.name)} ${icon('x', 12)}</button>`).join('')
@@ -241,20 +329,26 @@
     drawCrit();
     const jscn = $('#jscn', m.el); $('#jsca', m.el).onclick = () => { addCrit(jscn.value); jscn.value = ''; };
     jscn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addCrit(jscn.value); jscn.value = ''; } };
+    const senderName = () => { const x = senders.find(y => y.id === $('#jsn', m.el)?.value) || defSender; return x?.from_name || 'DRG Talent Team'; };
+    let tpl = { value: () => ({ changes: [] }) };
+    jobTemplatesEditor($('#jtpl', m.el), job, senderName, () => $('#jt', m.el).value.trim()).then(x => { tpl = x; });
     const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [], coord: job?.coordinator_ids || [] }, team, true);
     $('#save', m.el).onclick = async () => {
       const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
         employment_type: $('#je', m.el).value, openings: +$('#jo', m.el).value || 1, jd_text: $('#jx', m.el).value.trim(), client: $('#jc', m.el).value.trim() || null };
       const sn = $('#jsn', m.el); if (sn) d.sender_id = sn.value && sn.value !== defSender?.id ? sn.value : null;
-      if (!d.title) return toast('Add a job title first.', true);
-      const v = ed.value(); if (v.error) return toast(v.error, true);
+      if (!d.title) { goStep(0); return toast('Add a job title first.', true); }
+      const v = ed.value(); if (v.error) { goStep(2); return toast(v.error, true); }
       Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds, coordinator_ids: v.coordinator_ids });
+      const tv = tpl.value(); if (tv.error) { goStep(4); tpl.show?.(tv.key); return toast(tv.error, true); }
       const critChanged = JSON.stringify(crit) !== crit0;
       if (critChanged) d.interview_scoring = { ...(job?.interview_scoring || {}), criteria: crit, mode: scfg.mode, formula: scfg.formula, hire: scfg.hire, maybe: scfg.maybe };
       const btn = $('#save', m.el); btn.disabled = true;
       try { let saved;
-            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; m.close(); toast('Job updated'); route(); if (critChanged) rescoreJob(saved, scoringCfg(saved)); }
-            else { saved = await api.createJob(d); m.close(); toast('Job created. Now write the AI screening brief.'); location.hash = `#/jobs/${saved.id}?tab=brief`; }
+            const tplNote = async id => { if (!tv.changes.length) return ''; const bad = await saveJobTemplates(id, tv.changes);
+              return bad.length ? ` but ${bad.length} email${bad.length > 1 ? 's were' : ' was'} not saved; check the job's Emails tab` : ` with ${tv.changes.length} email change${tv.changes.length > 1 ? 's' : ''}`; };
+            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; const n = await tplNote(job.id); m.close(); toast(`Job updated${n}`, n.startsWith(' but')); route(); if (critChanged) rescoreJob(saved, scoringCfg(saved)); }
+            else { saved = await api.createJob(d); const n = await tplNote(saved.id); m.close(); toast(`Job created${n}. Now write the AI screening brief.`, n.startsWith(' but')); location.hash = `#/jobs/${saved.id}?tab=brief`; }
             ensureCalLinks({ ...saved, rounds: d.rounds, cal_links: saved.cal_links || {} }, team).then(r => { const bad = r.filter(x => !x.ok);
               if (bad.length) toast(`Cal.com link for Round ${bad.map(x => x.n).join(', ')} wasn't created. Open the job's Panel and rounds tab to retry.`, true); }); }
       catch (e) { btn.disabled = false; fail(e); }
@@ -611,12 +705,12 @@
         const rd = STAGE_ROUND[s.id] ? job?.rounds?.[STAGE_ROUND[s.id] - 1] : null;
         return `<section class="col" data-stage="${s.id}" aria-label="${s.name}"><div class="col-h"><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span><span class="row" style="gap:6px;flex-wrap:nowrap">${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
           <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="true" data-card="${c.id}" tabindex="0">
-            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div></div>
+            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b>${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div><a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
             ${c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
           </article>`).join('') || '<div class="small muted" style="padding:10px 4px">No one here yet</div>'}</div></section>`; }).join('');
       $$('[data-colcopy]').forEach(b => b.onclick = e => { e.stopPropagation(); const n = +b.dataset.colcopy; copyLink(roundLink(job, n, team)?.url, `Round ${n} booking link`); });
       $$('[data-card]').forEach(k => {
-        k.onclick = () => openCandidate(k.dataset.card);
+        k.onclick = e => { if (e.target.closest('.kc-open')) return; if (e.metaKey || e.ctrlKey) return openProfileTab(k.dataset.card); openCandidate(k.dataset.card); };
         k.onkeydown = e => e.key === 'Enter' && openCandidate(k.dataset.card);
         k.ondragstart = e => { e.dataTransfer.setData('text/plain', k.dataset.card); k.classList.add('dragging'); };
         k.ondragend = () => k.classList.remove('dragging');
@@ -766,7 +860,90 @@
     const off = e => { if (!m.contains(e.target) && e.target !== btn) { m.remove(); document.removeEventListener('mousedown', off); } };
     setTimeout(() => document.addEventListener('mousedown', off), 0);
   }
-  /* ───────── candidate drawer ───────── */
+  /* ───────── candidate: shared pieces (side drawer + full page) ───────── */
+  const profileUrl = (id, q) => `${location.pathname}${location.search}#/profile/${id}${q ? '?' + q : ''}`;
+  const openProfileTab = (id, q) => window.open(profileUrl(id, q), '_blank', 'noopener');
+  function failedMailsOf(a) {
+    const out = [];
+    [...a.emails].sort((p, q) => q.sent_at.localeCompare(p.sent_at)).forEach(m => {
+      if (m.status === 'failed' && !a.emails.some(x => x.template_key === m.template_key && x.status !== 'failed' && x.sent_at > m.sent_at) && !out.some(x => x.template_key === m.template_key)) out.push(m); });
+    return out;
+  }
+  function candidateActions(a, mode) {
+    const page = mode === 'page';
+    return `<select class="input" id="mv" style="width:auto" aria-label="Move to stage">${STAGES.filter(st => st.id !== 7 && (!STAGE_ROUND[st.id] || STAGE_ROUND[st.id] <= Math.max((a.jobs?.rounds || []).length, 1) || st.id === a.stage_id)).map(st => `<option value="${st.id}" ${st.id === a.stage_id ? 'selected' : ''}>${st.name}</option>`).join('')}</select>
+      <button class="btn primary sm" id="sched">${icon('cal', 15)}Schedule interview</button>
+      ${page ? '' : `<button class="btn sm" id="iscore" title="Opens the candidate's full page in a new tab, with scoring on the right">${icon('check', 15)}Interview scoring ↗</button>`}
+      ${STAGE_ROUND[a.stage_id] ? `<button class="btn sm" id="cplink" title="Copies this candidate's booking link with their name and email filled in">${icon('copy', 15)}Copy booking link</button>
+        <button class="btn sm" id="rsend">${icon('mail', 15)}${(a.interviews || []).some(i => i.status === 'scheduled' && i.stage_id === a.stage_id) ? 'Resend confirmation' : 'Resend booking email'}</button>` : ''}
+      ${page ? '' : `<button class="btn sm" id="resume">${icon('file', 15)}Resume</button>`}
+      ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
+      ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}`;
+  }
+  function candidateBody(a, iscores, canAct, mode) {
+    const c = a.candidates || {}; const sc = a.screening; const failed = failedMailsOf(a);
+    return `${mode === 'page' ? '' : scoringCard(a, iscores)}
+      ${failed.length && canAct ? `<div class="card card-b warn-box" style="display:grid;gap:8px"><b>${failed.length === 1 ? 'An email to this candidate could not be sent' : failed.length + ' emails to this candidate could not be sent'}</b>
+        ${failed.map(m => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(mailName(m.template_key))} · ${new Date(m.sent_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+          ${m.template_key === 'interviewer_notice' ? '' : `<button class="btn sm" data-resend="${esc(m.template_key)}">Send again</button>`}</div>`).join('')}
+        <span class="small muted">Usually this means Gmail needs reconnecting in n8n. Once it is fixed, click Send again.</span></div>` : ''}
+      ${sc ? `<div class="card card-b ai-sum" style="--v:${VCOLOR[sc.verdict]}"><div class="row" style="gap:8px">${icon('spark', 16)}<span class="eyebrow">AI summary</span></div><p class="prose">${esc(sc.summary)}</p>
+          <div class="small muted">Scored ${ago(sc.created_at)} · ${esc(sc.model || '')}</div></div>
+        <div class="card"><div class="card-h"><h3>Must-haves</h3></div><div class="card-b">${(sc.disqualifier_results || []).map(d => {
+          const col = d.result === 'met' ? 'var(--pass)' : d.result === 'not_met' ? 'var(--disq)' : 'var(--review)';
+          return `<div class="check"><span class="dot" style="background:${col}">${d.result === 'met' ? '✓' : d.result === 'not_met' ? '✕' : '?'}</span><div><b>${esc(d.rule || d.id)}</b> <span class="small" style="color:${col};font-weight:600">${d.result.replace('_', ' ')}</span>${d.evidence ? `<div class="quote">${esc(d.evidence)}</div>` : ''}</div></div>`; }).join('') || '<span class="muted">No must-haves set.</span>'}</div></div>
+        <div class="card"><div class="card-h"><h3>Criteria</h3><span class="small muted">rating out of 10 · weight</span></div><div class="card-b">${(sc.factor_scores || []).map(f => `
+          <div class="fbar"><div class="row" style="justify-content:space-between"><b>${esc(f.name || f.id)}</b><span class="num small">${f.rating}/10 · ${f.weight}%</span></div>
+            <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
+        : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
+      ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
+        ${(a.form_answers || []).map(q => `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>` : esc(q.value)}</div></div>`).join('')}
+        ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
+      ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
+        ${c.profile_summary ? `<p class="prose">${esc(c.profile_summary)}</p>` : ''}
+        ${!c.profile_summary && !(c.skills || []).length && !(c.work_history || []).length ? `<div class="small muted">${a.status === 'screening_failed' ? 'The profile summary, skills and work history appear here once the AI has read the resume. Click Rescreen to try again.' : 'The AI is building this profile from the resume.'}</div>` : ''}
+        ${(c.skills || []).length ? `<div class="row" style="gap:6px">${c.skills.map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>` : ''}
+        ${(c.work_history || []).map(w => `<div class="wh"><b>${esc(w.title)}</b> · ${esc(w.company)} <span class="small muted">${esc(w.start || '')} – ${esc(w.end || '')}</span><div class="small muted">${esc(w.summary || '')}</div></div>`).join('')}
+        ${(c.education || []).map(e => `<div class="small"><b>${esc(e.degree)}</b> · ${esc(e.institution)} ${esc(e.year || '')}</div>`).join('')}</div></div>` : ''}
+      ${a.interviews?.length ? `<div class="card"><div class="card-h"><h3>Interviews</h3></div><div class="list">${a.interviews.map(i => `<div class="li" style="cursor:default"><div class="grow"><b>${stageName(i.stage_id)} · ${fmtDate(i.scheduled_at)} ${fmtTime(i.scheduled_at)}</b>
+        <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}</div>
+        ${i.status === 'scheduled' ? `<button class="btn sm" data-score="${i.id}">Scorecard</button>` : ''}</div>`).join('')}</div></div>` : ''}
+      <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
+          ...a.emails.map(m => ({ t: m.sent_at, txt: `${m.status === 'failed' ? 'Email NOT sent' : 'Email sent'}: ${mailName(m.template_key)}${m.template_key === 'interviewer_notice' && m.to_email ? ' (' + m.to_email + ')' : ''}` }))].sort((p, q) => q.t.localeCompare(p.t))
+          .map(x => `<div class="tl"><i></i><div><div>${esc(x.txt)}</div><div class="small muted">${new Date(x.t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div></div></div>`).join('')}</div></div>`;
+  }
+  // Wires the stage select and action buttons; `hooks` decides how scoring opens (new tab from the drawer, the right panel on the full page)
+  function bindCandidate(root, a, render, hooks) {
+    const id = a.id, c = a.candidates || {};
+    const again = () => { render(); state.redraw?.(); };
+    const mv = $('#mv', root);
+    if (mv) mv.onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, again); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); again(); } catch (er) { fail(er); } };
+    const sch = $('#sched', root); if (sch) sch.onclick = () => scheduleFlow(id, STAGE_ROUND[a.stage_id] ? a.stage_id : 3, again);
+    $$('[data-copyphone]', root).forEach(b => b.onclick = async () => toast(await copyText(b.dataset.copyphone) ? 'Phone number copied' : b.dataset.copyphone));
+    const cpl = $('#cplink', root);
+    if (cpl) cpl.onclick = async () => { const n = STAGE_ROUND[a.stage_id]; let team = []; try { team = await api.team(); } catch (e) { team = []; }
+      copyLink(personalLink(roundLink(a.jobs, n, team), a, n), `${firstName(c.full_name) || 'Candidate'}'s Round ${n} booking link`); };
+    const rs = $('#rsend', root);
+    if (rs) rs.onclick = async () => { const n = STAGE_ROUND[a.stage_id];
+      const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled' && i.stage_id === a.stage_id);
+      rs.disabled = true; const label = rs.textContent; rs.textContent = 'Sending…';
+      try { await api.resendEmail(id, iv ? 'interview_invite' : `stage_${a.stage_id}`, iv?.id);
+        toast(iv ? `Interview confirmation sent to ${c.email || 'the candidate'}` : `Round ${n} booking email sent to ${c.email || 'the candidate'}`); render(); }
+      catch (e) { rs.disabled = false; rs.textContent = label; fail(e); } };
+    $$('[data-resend]', root).forEach(b => b.onclick = async () => { b.disabled = true;
+      try { const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled'); await api.resendEmail(id, b.dataset.resend, iv?.id); toast('Email sent'); render(); }
+      catch (e) { b.disabled = false; fail(e); } });
+    $$('[data-att]', root).forEach(b => b.onclick = () => { const f = a.attachments[+b.dataset.att]; viewFile({ path: f.path, name: f.name || f.label || String(f.path).split('/').pop() }); });
+    const rsm = $('#resume', root); if (rsm) rsm.onclick = () => { if (!a.resumes?.storage_path) return toast('No resume file for this candidate.', true); viewFile({ path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }); };
+    const rsc = $('#rescr', root); if (rsc) rsc.onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } };
+    const rj = $('#rej', root); if (rj) rj.onclick = () => rejectFlow(id, again);
+    $$('[data-score]', root).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.score);
+      scoringCfg(a.jobs).criteria.length ? hooks.score({ interview: iv }) : scorecardFlow(b.dataset.score, render); });
+    const isc = $('#iscore', root); if (isc) isc.onclick = () => hooks.score({});
+    $$('[data-isedit]', root).forEach(b => b.onclick = () => hooks.score({ existingId: b.dataset.isedit }));
+  }
+
+  /* ───────── candidate drawer (quick view) ───────── */
   async function openCandidate(id) {
     const s = document.createElement('div'); s.className = 'scrim';
     s.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Candidate"><div class="empty"><span class="spin"></span></div></aside>`;
@@ -779,89 +956,334 @@
       const [a, iscores] = await Promise.all([api.application(id), api.interviewScores(id).catch(() => [])]);
       const c = a.candidates || {}; const sc = a.screening; const name = c.full_name || a.resumes?.file_name || 'New applicant';
       const canAct = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
-      const card = { status: a.status, verdict: sc?.verdict };
-      const failedMails = [];
-      [...a.emails].sort((p, q) => q.sent_at.localeCompare(p.sent_at)).forEach(m => {
-        if (m.status === 'failed' && !a.emails.some(x => x.template_key === m.template_key && x.status !== 'failed' && x.sent_at > m.sent_at) && !failedMails.some(x => x.template_key === m.template_key)) failedMails.push(m); });
       $('.drawer', s).innerHTML = `
         <div class="drawer-h">
           <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${avatar(name, 48)}
             <div style="flex:1;min-width:0"><h2>${esc(name)}</h2><div class="small muted">${esc(a.jobs?.title)} · ${stageName(a.stage_id)} · applied ${fmtDate(a.created_at)}</div>
-              <div class="row" style="margin-top:8px;gap:6px">${chip(card)}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}</div></div>
+              <div class="row" style="margin-top:8px;gap:6px">${chip({ status: a.status, verdict: sc?.verdict })}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}</div></div>
             ${ring(sc?.score ?? null, sc?.verdict, 64)}<button class="x" data-close aria-label="Close">${icon('x', 20)}</button></div>
+          <a class="btn sm open-full" href="${esc(profileUrl(id))}" target="_blank" rel="noopener" title="Resume on the left, details in the middle, interview scoring on the right">${icon('file', 15)}Open full page in a new tab ↗</a>
           ${c.phone ? phoneBlock(c.phone) : ''}
-          ${canAct ? `<div class="row" style="gap:8px">
-            <select class="input" id="mv" style="width:auto" aria-label="Move to stage">${STAGES.filter(st => st.id !== 7 && (!STAGE_ROUND[st.id] || STAGE_ROUND[st.id] <= Math.max((a.jobs?.rounds || []).length, 1) || st.id === a.stage_id)).map(st => `<option value="${st.id}" ${st.id === a.stage_id ? 'selected' : ''}>${st.name}</option>`).join('')}</select>
-            <button class="btn primary sm" id="sched">${icon('cal', 15)}Schedule interview</button>
-            <button class="btn sm" id="iscore">${icon('check', 15)}Interview scoring</button>
-            ${STAGE_ROUND[a.stage_id] ? `<button class="btn sm" id="cplink" title="Copies this candidate's booking link with their name and email filled in">${icon('copy', 15)}Copy booking link</button>
-              <button class="btn sm" id="rsend">${icon('mail', 15)}${(a.interviews || []).some(i => i.status === 'scheduled' && i.stage_id === a.stage_id) ? 'Resend confirmation' : 'Resend booking email'}</button>` : ''}
-            <button class="btn sm" id="resume">${icon('file', 15)}Resume</button>
-            ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
-            ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}</div>` : ''}
+          ${canAct ? `<div class="row" style="gap:8px">${candidateActions(a, 'drawer')}</div>` : ''}
         </div>
-        <div class="drawer-b">
-          ${scoringCard(a, iscores)}
-          ${failedMails.length && canAct ? `<div class="card card-b warn-box" style="display:grid;gap:8px"><b>${failedMails.length === 1 ? 'An email to this candidate could not be sent' : failedMails.length + ' emails to this candidate could not be sent'}</b>
-            ${failedMails.map(m => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(mailName(m.template_key))} · ${new Date(m.sent_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-              ${m.template_key === 'interviewer_notice' ? '' : `<button class="btn sm" data-resend="${esc(m.template_key)}">Send again</button>`}</div>`).join('')}
-            <span class="small muted">Usually this means Gmail needs reconnecting in n8n. Once it is fixed, click Send again.</span></div>` : ''}
-          ${sc ? `<div class="card card-b" style="display:grid;gap:8px;border-left:3px solid ${VCOLOR[sc.verdict]}"><div class="row" style="gap:8px">${icon('spark', 16)}<span class="eyebrow">AI summary</span></div><div style="font-size:15px">${esc(sc.summary)}</div>
-              <div class="small muted">Scored ${ago(sc.created_at)} · ${esc(sc.model || '')}</div></div>
-            <div class="card"><div class="card-h"><h3>Must-haves</h3></div><div class="card-b">${(sc.disqualifier_results || []).map(d => {
-              const col = d.result === 'met' ? 'var(--pass)' : d.result === 'not_met' ? 'var(--disq)' : 'var(--review)';
-              return `<div class="check"><span class="dot" style="background:${col}">${d.result === 'met' ? '✓' : d.result === 'not_met' ? '✕' : '?'}</span><div><b>${esc(d.rule || d.id)}</b> <span class="small" style="color:${col};font-weight:600">${d.result.replace('_', ' ')}</span>${d.evidence ? `<div class="quote">${esc(d.evidence)}</div>` : ''}</div></div>`; }).join('') || '<span class="muted">No must-haves set.</span>'}</div></div>
-            <div class="card"><div class="card-h"><h3>Criteria</h3><span class="small muted">rating out of 10 · weight</span></div><div class="card-b">${(sc.factor_scores || []).map(f => `
-              <div class="fbar"><div class="row" style="justify-content:space-between"><b>${esc(f.name || f.id)}</b><span class="num small">${f.rating}/10 · ${f.weight}%</span></div>
-                <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
-            : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
-          ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
-            ${(a.form_answers || []).map(q => `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>` : esc(q.value)}</div></div>`).join('')}
-            ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
-          ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
-            ${c.profile_summary ? `<div style="font-size:14.5px;line-height:1.6">${esc(c.profile_summary)}</div>` : ''}
-            ${!c.profile_summary && !(c.skills || []).length && !(c.work_history || []).length ? `<div class="small muted">${a.status === 'screening_failed' ? 'The profile summary, skills and work history appear here once the AI has read the resume. Click Rescreen to try again.' : 'The AI is building this profile from the resume.'}</div>` : ''}
-            ${(c.skills || []).length ? `<div class="row" style="gap:6px">${c.skills.map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>` : ''}
-            ${(c.work_history || []).map(w => `<div><b>${esc(w.title)}</b> · ${esc(w.company)} <span class="small muted">${esc(w.start || '')} – ${esc(w.end || '')}</span><div class="small muted">${esc(w.summary || '')}</div></div>`).join('')}
-            ${(c.education || []).map(e => `<div class="small"><b>${esc(e.degree)}</b> · ${esc(e.institution)} ${esc(e.year || '')}</div>`).join('')}</div></div>` : ''}
-          ${a.interviews?.length ? `<div class="card"><div class="card-h"><h3>Interviews</h3></div><div class="list">${a.interviews.map(i => `<div class="li" style="cursor:default"><div class="grow"><b>${stageName(i.stage_id)} · ${fmtDate(i.scheduled_at)} ${fmtTime(i.scheduled_at)}</b>
-            <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}</div>
-            ${i.status === 'scheduled' ? `<button class="btn sm" data-score="${i.id}">Scorecard</button>` : ''}</div>`).join('')}</div></div>` : ''}
-          <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
-              ...a.emails.map(m => ({ t: m.sent_at, txt: `${m.status === 'failed' ? 'Email NOT sent' : 'Email sent'}: ${mailName(m.template_key)}${m.template_key === 'interviewer_notice' && m.to_email ? ' (' + m.to_email + ')' : ''}` }))].sort((p, q) => q.t.localeCompare(p.t))
-              .map(x => `<div class="tl"><i></i><div><div>${esc(x.txt)}</div><div class="small muted">${new Date(x.t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div></div></div>`).join('')}</div></div>
-        </div>`;
+        <div class="drawer-b">${candidateBody(a, iscores, canAct, 'drawer')}</div>`;
       if (!canAct) return;
-      $('#mv', s).onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, () => { render(); state.redraw?.(); }); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); render(); state.redraw?.(); } catch (er) { fail(er); } };
-      $('#sched', s).onclick = () => scheduleFlow(id, STAGE_ROUND[a.stage_id] ? a.stage_id : 3, () => { render(); state.redraw?.(); });
-      $$('[data-copyphone]', s).forEach(b => b.onclick = async () => toast(await copyText(b.dataset.copyphone) ? 'Phone number copied' : b.dataset.copyphone));
-      const cpl = $('#cplink', s);
-      if (cpl) cpl.onclick = async () => { const n = STAGE_ROUND[a.stage_id]; let team = []; try { team = await api.team(); } catch (e) { team = []; }
-        copyLink(personalLink(roundLink(a.jobs, n, team), a, n), `${firstName(c.full_name) || 'Candidate'}'s Round ${n} booking link`); };
-      const rs = $('#rsend', s);
-      if (rs) rs.onclick = async () => { const n = STAGE_ROUND[a.stage_id];
-        const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled' && i.stage_id === a.stage_id);
-        rs.disabled = true; const label = rs.textContent;
-        rs.textContent = 'Sending…';
-        try { await api.resendEmail(id, iv ? 'interview_invite' : `stage_${a.stage_id}`, iv?.id);
-          toast(iv ? `Interview confirmation sent to ${c.email || 'the candidate'}` : `Round ${n} booking email sent to ${c.email || 'the candidate'}`); render(); }
-        catch (e) { rs.disabled = false; rs.textContent = label; fail(e); } };
-      $$('[data-resend]', s).forEach(b => b.onclick = async () => { b.disabled = true;
-        try { const iv = [...(a.interviews || [])].reverse().find(i => i.status === 'scheduled'); await api.resendEmail(id, b.dataset.resend, iv?.id); toast('Email sent'); render(); }
-        catch (e) { b.disabled = false; fail(e); } });
-      $$('[data-att]', s).forEach(b => b.onclick = () => { const f = a.attachments[+b.dataset.att]; viewFile({ path: f.path, name: f.name || f.label || String(f.path).split('/').pop() }); });
-      $('#resume', s).onclick = () => { if (!a.resumes?.storage_path) return toast('No resume file for this candidate.', true); viewFile({ path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }); };
-      $('#rescr', s) && ($('#rescr', s).onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } });
-      $('#rej', s) && ($('#rej', s).onclick = () => rejectFlow(id, () => { render(); state.redraw?.(); }));
-      $$('[data-score]', s).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.score);
-        scoringCfg(a.jobs).criteria.length ? scoringFlow(a, render, { interview: iv }) : scorecardFlow(b.dataset.score, render); });
-      $('#iscore', s).onclick = () => scoringFlow(a, render);
-      $$('[data-isedit]', s).forEach(b => b.onclick = () => scoringFlow(a, render, { existing: iscores.find(x => x.id === b.dataset.isedit) }));
+      bindCandidate(s, a, render, { score: o => openProfileTab(id, o.interview ? `iv=${o.interview.id}` : o.existingId ? `edit=${o.existingId}` : 'score=1') });
     };
     try { await render(); } catch (e) { fail(e); close(); }
     let rt; const unsub = api.subscribe(() => { clearTimeout(rt); rt = setTimeout(() => { if (document.body.contains(s)) render().catch(() => {}); }, 300); });
     const obs = new MutationObserver(() => { if (!document.body.contains(s)) { unsub(); obs.disconnect(); } });
     obs.observe(document.body, { childList: true });
+  }
+
+  /* ───────── candidate full page: resume | details | interview scoring ───────── */
+  // Resume viewer with a hand (pan) tool: drag to move around, zoom with the buttons or Ctrl + scroll
+  let pdfLibReady = null;
+  function loadPdfLib() {
+    if (window.pdfjsLib) { pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsLib.GlobalWorkerOptions.workerSrc || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; return Promise.resolve(); }
+    return pdfLibReady = pdfLibReady || loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js')
+      .then(() => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; })
+      .catch(e => { pdfLibReady = null; throw e; });
+  }
+  async function pdfViewer(host, buf, name) {
+    await loadPdfLib();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pref = () => { try { return localStorage.getItem('ats.pdf.zoom'); } catch (e) { return null; } };
+    let zoom = pref() === 'fit' || !pref() ? 'fit' : Math.max(0.5, Math.min(3, +pref() || 1)), pan = true, rendering = 0;
+    host.innerHTML = `<div class="pv">
+      <div class="pv-bar" role="toolbar" aria-label="Resume tools">
+        <button type="button" class="pv-b on" data-pv="pan" title="Hand tool: drag to move around the page" aria-pressed="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/></svg>Pan</button>
+        <span class="pv-sep"></span>
+        <button type="button" class="pv-b" data-pv="out" title="Zoom out" aria-label="Zoom out">−</button>
+        <span class="pv-z" id="pvz">100%</span>
+        <button type="button" class="pv-b" data-pv="in" title="Zoom in" aria-label="Zoom in">+</button>
+        <button type="button" class="pv-b" data-pv="fit" title="Fit the page width to the panel">Fit width</button>
+        <span class="grow"></span><span class="pv-pg small muted" id="pvpg">${pdf.numPages} page${pdf.numPages > 1 ? 's' : ''}</span>
+      </div>
+      <div class="pv-scroll pan" tabindex="0" aria-label="${esc(name || 'Resume')}"><div class="pv-pages"></div></div></div>`;
+    const sc = $('.pv-scroll', host), pages = $('.pv-pages', host), zl = $('#pvz', host);
+    const first = await pdf.getPage(1); const baseW = first.getViewport({ scale: 1 }).width;
+    const scaleNow = () => zoom === 'fit' ? Math.max(0.3, (sc.clientWidth - 28) / baseW) : zoom;
+    const draw = async () => {
+      const run = ++rendering, s = scaleNow(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const keep = sc.scrollHeight ? { x: sc.scrollLeft / Math.max(1, sc.scrollWidth), y: sc.scrollTop / Math.max(1, sc.scrollHeight) } : null;
+      zl.textContent = Math.round(s * 100) + '%';
+      const frag = document.createDocumentFragment();
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const page = n === 1 ? first : await pdf.getPage(n); if (run !== rendering) return;
+        const vp = page.getViewport({ scale: s * dpr }); const c = document.createElement('canvas');
+        c.width = Math.floor(vp.width); c.height = Math.floor(vp.height); c.style.width = Math.floor(vp.width / dpr) + 'px'; c.style.height = Math.floor(vp.height / dpr) + 'px';
+        c.className = 'pv-page'; await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; if (run !== rendering) return;
+        frag.append(c);
+      }
+      pages.replaceChildren(frag);
+      if (keep) { sc.scrollLeft = keep.x * sc.scrollWidth; sc.scrollTop = keep.y * sc.scrollHeight; }
+    };
+    const setZoom = z => { zoom = z; try { localStorage.setItem('ats.pdf.zoom', String(z)); } catch (e) { /* private mode */ } draw(); };
+    const step = d => setZoom(Math.round(Math.max(0.5, Math.min(3, scaleNow() + d)) * 100) / 100);
+    $$('[data-pv]', host).forEach(b => b.onclick = () => { const k = b.dataset.pv;
+      if (k === 'in') step(0.15); else if (k === 'out') step(-0.15); else if (k === 'fit') setZoom('fit');
+      else if (k === 'pan') { pan = !pan; b.classList.toggle('on', pan); b.setAttribute('aria-pressed', pan); sc.classList.toggle('pan', pan); } });
+    // Drag to pan (mouse, pen or touch)
+    let drag = null;
+    sc.addEventListener('pointerdown', e => { if (!pan || e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, l: sc.scrollLeft, t: sc.scrollTop }; sc.setPointerCapture(e.pointerId); sc.classList.add('grabbing'); e.preventDefault(); });
+    sc.addEventListener('pointermove', e => { if (!drag) return; sc.scrollLeft = drag.l - (e.clientX - drag.x); sc.scrollTop = drag.t - (e.clientY - drag.y); });
+    const end = () => { drag = null; sc.classList.remove('grabbing'); };
+    sc.addEventListener('pointerup', end); sc.addEventListener('pointercancel', end);
+    // Ctrl/Cmd + scroll zooms; plain scroll scrolls
+    sc.addEventListener('wheel', e => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); clearTimeout(sc._zt); const d = e.deltaY < 0 ? 0.1 : -0.1; sc._zt = setTimeout(() => step(d), 40); }, { passive: false });
+    sc.addEventListener('keydown', e => { if (e.key === '+' || e.key === '=') step(0.15); if (e.key === '-') step(-0.15); if (e.key === '0') setZoom('fit'); });
+    // Page counter while scrolling
+    sc.addEventListener('scroll', () => { const cs = $$('.pv-page', pages); if (cs.length < 2) return; const mid = sc.scrollTop + sc.clientHeight / 3;
+      let n = 1; cs.forEach((c, i) => { if (c.offsetTop <= mid) n = i + 1; }); $('#pvpg', host).textContent = `Page ${n} of ${cs.length}`; }, { passive: true });
+    // Re-fit when the panel is resized
+    if (window.ResizeObserver) { let rt, w0 = sc.clientWidth; const ro = new ResizeObserver(() => { if (!document.body.contains(sc)) return ro.disconnect(); if (zoom !== 'fit' || Math.abs(sc.clientWidth - w0) < 8) return; w0 = sc.clientWidth; clearTimeout(rt); rt = setTimeout(draw, 150); }); ro.observe(sc); }
+    await draw();
+  }
+  // Shows a file inside `host` (PDF in a frame, images, or the text read from a Word file)
+  async function fileInto(host, { path, name, resumeId }, links) {
+    const ext = String(name || path || '').split('.').pop().toLowerCase();
+    const kind = ext === 'pdf' ? 'pdf' : ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext) ? 'img' : 'doc';
+    host.innerHTML = '<div class="empty"><span class="spin"></span></div>';
+    try {
+      const url = await api.fileUrl(path);
+      if (links && url) { links.innerHTML = `<a class="btn sm ghost" href="${esc(url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(name || 'file'))}">Download</a><a class="btn sm ghost" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>`; }
+      if (!url && kind !== 'doc') { host.innerHTML = '<div class="empty">Files open in the live app (the demo has sample data only).</div>'; return null; }
+      if (kind === 'pdf') {
+        const r = await fetch(url); if (!r.ok) throw new Error('The file could not be loaded.');
+        const blob = await r.blob();
+        // Our own viewer (with the hand tool); the browser's built-in PDF viewer is the fallback
+        try { await pdfViewer(host, await blob.arrayBuffer(), name); return null; } catch (e) { console.warn('PDF viewer fallback:', e); }
+        const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        host.innerHTML = `<iframe class="cp-frame" title="${esc(name || 'Resume')}" src="${blobUrl}#view=FitH&toolbar=1"></iframe>`; return blobUrl;
+      }
+      if (kind === 'img') { host.innerHTML = `<div class="viewer-img"><img src="${esc(url)}" alt="${esc(name || '')}"></div>`; return null; }
+      const text = resumeId ? await api.resumeText(resumeId) : '';
+      host.innerHTML = `<div class="cp-text">${text ? `<pre>${esc(text)}</pre>` : '<div class="empty">No text could be read from this file. Use Download to view it.</div>'}<div class="small muted">Word files can't be shown as-is in the browser; this is the text the AI read. Use Download for the original.</div></div>`;
+      return null;
+    } catch (e) { host.innerHTML = `<div class="empty">${esc(e.message || 'The file could not be shown.')} Use Download instead.</div>`; return null; }
+  }
+
+  /* ───────── AI interview questions (candidate full page) ───────── */
+  const iqState = {};
+  const iqTick = (setId, i, v) => { try { const k = 'ats.iq.' + setId; const o = JSON.parse(localStorage.getItem(k) || '{}'); if (v === undefined) return !!o[i]; o[i] = v; localStorage.setItem(k, JSON.stringify(o)); } catch (e) { return false; } };
+  async function questionsCard(host, a) {
+    const st = iqState[a.id] = iqState[a.id] || { busy: false, form: false, sel: null, open: {} };
+    const canGen = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
+    let sets = []; try { sets = await api.interviewQuestions(a.id); } catch (e) { sets = []; }
+    const rounds = a.jobs?.rounds || []; const nR = Math.max(rounds.length, 1);
+    const curRound = STAGE_ROUND[a.stage_id] || 1;
+    const draw = () => {
+      const set = sets.find(x => x.id === st.sel) || sets[0] || null;
+      const items = set?.questions?.items || [];
+      const form = st.form || !set;
+      const done = set ? items.filter((_, i) => iqTick(set.id || 'x', i)).length : 0;
+      host.innerHTML = `<div class="card iq">
+        <div class="card-h"><div class="row" style="gap:10px"><span class="iq-ic">${icon('spark', 18)}</span><div><h3>Interview questions</h3><div class="small muted">${set ? `Round ${set.round_no || '–'}${rounds[(set.round_no || 1) - 1]?.name ? ' · ' + esc(rounds[(set.round_no || 1) - 1].name) : ''} · written by AI for ${esc(set.created_by_name || 'the team')} · ${fmtDate(set.created_at)}${items.length ? ` · ${done}/${items.length} asked` : ''}` : 'AI writes questions for this candidate from their resume, the job and your scoring points.'}</div></div></div>
+          ${set && !st.busy ? `<div class="row" style="gap:6px">${sets.length > 1 ? `<select class="input sm" id="iqsel" aria-label="Earlier question sets">${sets.map((x, i) => `<option value="${x.id}" ${x.id === set.id ? 'selected' : ''}>Set ${sets.length - i} · Round ${x.round_no || '–'} · ${fmtDate(x.created_at)}</option>`).join('')}</select>` : ''}
+            <button class="btn sm ghost" id="iqcopy" title="Copy all questions">${icon('copy', 14)}Copy</button>${canGen ? `<button class="btn sm" id="iqnew">${icon('spark', 14)}New set</button>` : ''}</div>` : ''}</div>
+        <div class="card-b iq-b">
+          ${st.busy ? `<div class="iq-busy"><span class="spin"></span><div><b>Writing questions for ${esc(firstName(a.candidates?.full_name) || 'this candidate')}…</b><div class="small muted">Reading the resume, the job and the scores so far. This takes about 20 seconds.</div></div></div>`
+          : form && canGen ? `<div class="iq-form">
+              <div class="grid2"><div class="field"><label for="iqr">For which round?</label><select class="input" id="iqr">${Array.from({ length: nR }, (_, k) => k + 1).map(n => `<option value="${n}" ${n === (st.round || curRound) ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+                <div class="field"><label for="iqf">Anything to focus on? <span class="muted">(optional)</span></label><input class="input" id="iqf" maxlength="300" placeholder="e.g. objection handling, why they left their last job" value="${esc(st.focus || '')}"></div></div>
+              <div class="row" style="gap:8px"><button class="btn primary" id="iqgo">${icon('spark', 15)}Write questions</button>${set ? '<button class="btn" id="iqcancel">Cancel</button>' : ''}<span class="small muted">8–10 questions in interview order, each with what to listen for and a follow-up.</span></div>
+              ${st.err ? `<div class="small" style="color:var(--disq)" role="alert">${esc(st.err)}</div>` : ''}</div>`
+          : !set ? '<div class="small muted">No questions yet. Ask a recruiter or hiring manager to write them.</div>' : ''}
+          ${set && !st.busy && !(form && canGen) ? `${set.questions?.intro ? `<div class="iq-intro">${esc(set.questions.intro)}</div>` : ''}${set.focus ? `<div class="small muted">Focus asked for: ${esc(set.focus)}</div>` : ''}
+            <ol class="iq-list">${items.map((q, i) => { const on = iqTick(set.id || 'x', i), open = !!st.open[i];
+              return `<li class="iq-q ${on ? 'asked' : ''}"><button type="button" class="iq-tick" data-tick="${i}" aria-pressed="${on}" title="${on ? 'Asked' : 'Mark as asked'}">${on ? '✓' : i + 1}</button>
+                <div class="iq-main"><div class="iq-top"><span class="tag iq-area">${esc(q.area || 'General')}</span></div>
+                  <div class="iq-text">${esc(q.question)}</div>
+                  <button type="button" class="linkbtn small" data-more="${i}">${open ? 'Hide tips' : 'What to listen for'}</button>
+                  ${open ? `<dl class="iq-more"><div><dt>Why ask</dt><dd>${esc(q.why)}</dd></div><div><dt>A strong answer</dt><dd>${esc(q.look_for)}</dd></div><div><dt>Follow-up</dt><dd>${esc(q.follow_up)}</dd></div></dl>` : ''}</div></li>`; }).join('')}</ol>
+            ${set.id && canGen ? '<div class="row" style="justify-content:flex-end"><button class="linkbtn small" id="iqdel" style="color:var(--muted)">Delete this set</button></div>' : ''}` : ''}
+        </div></div>`;
+      const go = $('#iqgo', host);
+      if (go) go.onclick = async () => { st.round = +$('#iqr', host).value; st.focus = $('#iqf', host).value.trim(); st.busy = true; st.err = ''; draw();
+        try { const r = await api.generateQuestions(a.id, st.round, st.focus); sets = [r.set, ...sets.filter(x => x.id !== r.set.id)]; st.sel = r.set.id; st.form = false; st.open = {}; toast(r.message || 'Questions ready'); }
+        catch (e) { st.err = e.message || 'Could not write questions. Try again.'; }
+        st.busy = false; if (!host.isConnected) { const h = document.getElementById('iqcard'); if (h) questionsCard(h, a); return; } draw(); };
+      const cn = $('#iqcancel', host); if (cn) cn.onclick = () => { st.form = false; st.err = ''; draw(); };
+      const nw = $('#iqnew', host); if (nw) nw.onclick = () => { st.form = true; draw(); $('#iqf', host)?.focus(); };
+      const sel = $('#iqsel', host); if (sel) sel.onchange = () => { st.sel = sel.value; st.open = {}; draw(); };
+      const cp = $('#iqcopy', host); if (cp) cp.onclick = async () => { const s = sets.find(x => x.id === st.sel) || sets[0];
+        const txt = `${a.candidates?.full_name || 'Candidate'} · ${a.jobs?.title || ''} · Round ${s.round_no || ''}\n${s.questions?.intro || ''}\n\n` + (s.questions?.items || []).map((q, i) => `${i + 1}. [${q.area}] ${q.question}\n   Listen for: ${q.look_for}\n   Follow-up: ${q.follow_up}`).join('\n\n');
+        toast(await copyText(txt) ? 'Questions copied' : 'Could not copy', false); };
+      $$('[data-tick]', host).forEach(b => b.onclick = () => { const s = sets.find(x => x.id === st.sel) || sets[0]; const i = +b.dataset.tick; iqTick(s.id || 'x', i, !iqTick(s.id || 'x', i)); draw(); });
+      $$('[data-more]', host).forEach(b => b.onclick = () => { const i = +b.dataset.more; st.open[i] = !st.open[i]; draw(); });
+      const dl = $('#iqdel', host); if (dl) dl.onclick = async () => { if (dl.dataset.armed !== '1') { dl.dataset.armed = '1'; dl.textContent = 'Click again to delete'; return; }
+        const s = sets.find(x => x.id === st.sel) || sets[0]; try { await api.deleteQuestions(s.id); sets = sets.filter(x => x.id !== s.id); st.sel = null; toast('Question set deleted'); draw(); } catch (e) { fail(e); } };
+    };
+    draw();
+  }
+
+  // Resizable columns on the candidate page (resume | details | scoring)
+  const SPLIT_DEF = { res: 0.36, sc: 380 }, SPLIT_MIN = { res: 300, sc: 300, mid: 340 };
+  function splitWidths() {
+    let w = {}; try { w = JSON.parse(localStorage.getItem('ats.cp.split') || '{}'); } catch (e) { w = {}; }
+    return { res: +w.res || 0, sc: +w.sc || 0 };
+  }
+  function layoutSplit(el, showRes, showSc) {
+    const grid = $('.cp-grid', el); if (!grid) return;
+    const apply = () => {
+      if (window.innerWidth <= 1250) { grid.style.gridTemplateColumns = ''; grid.classList.remove('split'); return; }
+      const total = grid.clientWidth, gut = 10, w = splitWidths();
+      let res = showRes ? (w.res || Math.round(total * SPLIT_DEF.res)) : 0, sc = showSc ? (w.sc || SPLIT_DEF.sc) : 0;
+      const room = total - (showRes ? gut : 0) - (showSc ? gut : 0) - SPLIT_MIN.mid;
+      if (res + sc > room) { const k = room / (res + sc); res = Math.floor(res * k); sc = Math.floor(sc * k); }
+      res = showRes ? Math.max(SPLIT_MIN.res, res) : 0; sc = showSc ? Math.max(SPLIT_MIN.sc, sc) : 0;
+      grid.classList.add('split');
+      grid.style.gridTemplateColumns = [showRes ? `${res}px ${gut}px` : '', 'minmax(0,1fr)', showSc ? `${gut}px ${sc}px` : ''].filter(Boolean).join(' ');
+    };
+    apply();
+    if (!grid.dataset.rz) { grid.dataset.rz = '1'; const onR = () => { if (!document.body.contains(grid)) return window.removeEventListener('resize', onR); apply(); }; window.addEventListener('resize', onR); }
+    const save = (k, v) => { const w = splitWidths(); w[k] = v; try { localStorage.setItem('ats.cp.split', JSON.stringify(w)); } catch (e) { /* private mode */ } apply(); };
+    $$('.cp-split', grid).forEach(g => {
+      const k = g.dataset.split;
+      const pane = k === 'res' ? $('.cp-resume', grid) : $('.cp-scoring', grid);
+      g.onpointerdown = e => { e.preventDefault(); g.setPointerCapture(e.pointerId); document.body.classList.add('cp-dragging');
+        const x0 = e.clientX, w0 = pane.getBoundingClientRect().width;
+        const move = ev => { const dx = ev.clientX - x0; const nw = Math.round(k === 'res' ? w0 + dx : w0 - dx);
+          const w = splitWidths(); w[k] = nw; try { localStorage.setItem('ats.cp.split', JSON.stringify(w)); } catch (er) { /* ignore */ } apply(); };
+        const up = () => { g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); document.body.classList.remove('cp-dragging'); };
+        g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up); };
+      g.ondblclick = () => save(k, 0);
+      g.onkeydown = e => { const step = e.shiftKey ? 80 : 24, cur = pane.getBoundingClientRect().width;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); save(k, Math.round(k === 'res' ? cur - step : cur + step)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); save(k, Math.round(k === 'res' ? cur + step : cur - step)); } };
+    });
+  }
+
+  async function candidatePage(el, id, params) {
+    document.body.classList.add('cp-mode');
+    const pref = k => { try { return localStorage.getItem('ats.' + k); } catch (e) { return null; } };
+    const setPref = (k, v) => { try { localStorage.setItem('ats.' + k, v); } catch (e) { /* private mode */ } };
+    let showResume = pref('cp.resume') !== '0', showScore = pref('cp.score') !== '0';
+    let scoreOpts = params.get('iv') ? { interviewId: params.get('iv') } : params.get('edit') ? { existingId: params.get('edit') } : {};
+    let blobUrl = null, resumeLoaded = false, team = null;
+    const canAct = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
+    const render = async () => {
+      const [a, iscores] = await Promise.all([api.application(id), api.interviewScores(id).catch(() => [])]);
+      if (team === null) { try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { team = []; } }
+      const c = a.candidates || {}; const sc = a.screening; const name = c.full_name || a.resumes?.file_name || 'New applicant';
+      document.title = `${name} · DRG ATS`;
+      const cfg = scoringCfg(a.jobs); const xs = iscores.filter(x => x.score != null);
+      const avg = xs.length ? xs.reduce((t, x) => t + +x.score, 0) / xs.length : null;
+      const keepScroll = $('.cp-main', el)?.scrollTop || 0;
+      el.innerHTML = `<div class="cp">
+        <div class="cp-bar"><span class="cp-brand"><span class="cp-logo"><img src="assets/drg-logo.svg" alt="DRG"></span><span>DRG ATS · Candidate</span></span><span class="grow"></span>
+          <a class="btn sm ghost" href="#/pipeline/${esc(a.job_id || a.jobs?.id || '')}" title="Go to this job's pipeline in this tab">${icon('board', 15)}Pipeline</a>
+          <button class="btn sm" id="cpclose" title="Close this tab">${icon('x', 15)}Close tab</button></div>
+        <header class="cp-head">
+          <div class="cp-id">${avatar(name, 56)}<div class="cp-who"><h1>${esc(name)}</h1>
+            <div class="cp-sub">${esc(a.jobs?.title || '')}${a.jobs?.client ? ` <span class="chip ext">${esc(a.jobs.client)}</span>` : ''} · <b>${stageName(a.stage_id)}</b> · applied ${fmtDate(a.created_at)}</div>
+            <div class="row" style="gap:6px;margin-top:8px">${chip({ status: a.status, verdict: sc?.verdict })}${c.email ? `<a class="tag" href="mailto:${esc(c.email)}">${icon('mail', 13)}${esc(c.email)}</a>` : ''}${c.linkedin_url ? `<a class="tag li-tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}</div></div></div>
+          <div class="cp-scores"><div class="cp-score-box"><span class="eyebrow">AI score</span>${ring(sc?.score ?? null, sc?.verdict, 58)}</div>
+            <div class="cp-score-box"><span class="eyebrow">Interview</span>${avg != null ? iscoreBadge(avg, ivVerdictOf(cfg, avg), true) : '<span class="small muted">Not scored yet</span>'}</div></div>
+          ${c.phone ? `<div class="cp-phone">${phoneBlock(c.phone)}</div>` : ''}
+          <div class="cp-actions">${canAct ? candidateActions(a, 'page') : ''}<span class="grow"></span>
+            <button class="btn sm ${showResume ? 'on' : ''}" id="tgres" aria-pressed="${showResume}">${icon('file', 15)}${showResume ? 'Hide resume' : 'Show resume'}</button>
+            <button class="btn sm ${showScore ? 'on' : ''}" id="tgsc" aria-pressed="${showScore}">${icon('check', 15)}${showScore ? 'Hide scoring' : 'Show scoring'}</button></div>
+        </header>
+        <div class="cp-grid ${showResume ? '' : 'no-res'} ${showScore ? '' : 'no-sc'}">
+          <section class="cp-pane cp-resume" ${showResume ? '' : 'hidden'} aria-label="Resume"><div class="cp-pane-h"><b>${icon('file', 15)}${esc(a.resumes?.file_name || 'Resume')}</b><span class="row" id="reslinks" style="gap:6px"></span><button class="x" id="xres" aria-label="Hide resume" title="Hide resume">${icon('x', 16)}</button></div><div class="cp-pane-b" id="resbody"></div></section>
+          ${showResume ? '<div class="cp-split" data-split="res" role="separator" aria-orientation="vertical" aria-label="Resize the resume panel" tabindex="0" title="Drag to resize · double-click to reset"><i></i></div>' : ''}
+          <section class="cp-main" aria-label="Candidate details"><div id="iqcard"></div>${candidateBody(a, iscores, canAct, 'page')}</section>
+          ${showScore ? '<div class="cp-split" data-split="sc" role="separator" aria-orientation="vertical" aria-label="Resize the scoring panel" tabindex="0" title="Drag to resize · double-click to reset"><i></i></div>' : ''}
+          <aside class="cp-pane cp-scoring" ${showScore ? '' : 'hidden'} aria-label="Interview scoring"><div class="cp-pane-h"><b>${icon('check', 15)}Interview scoring</b><button class="x" id="xsc" aria-label="Hide scoring" title="Hide scoring">${icon('x', 16)}</button></div><div class="cp-pane-b" id="scbody"></div></aside>
+        </div></div>`;
+      $('.cp-main', el).scrollTop = keepScroll;
+      layoutSplit(el, showResume, showScore);
+      $('#cpclose', el).onclick = () => { window.close(); setTimeout(() => { if (!window.closed) location.hash = `#/pipeline/${a.job_id || ''}`; }, 150); };
+      const setRes = v => { showResume = v; setPref('cp.resume', v ? '1' : '0'); render(); };
+      const setSc = v => { showScore = v; setPref('cp.score', v ? '1' : '0'); render(); };
+      $('#tgres', el).onclick = () => setRes(!showResume); $('#xres', el).onclick = () => setRes(false);
+      $('#tgsc', el).onclick = () => setSc(!showScore); $('#xsc', el).onclick = () => setSc(false);
+      if (showResume) {
+        if (!a.resumes?.storage_path) $('#resbody', el).innerHTML = '<div class="empty">No resume file for this candidate.</div>';
+        else { if (blobUrl) URL.revokeObjectURL(blobUrl); blobUrl = await fileInto($('#resbody', el), { path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }, $('#reslinks', el)); resumeLoaded = true; }
+      }
+      questionsCard($('#iqcard', el), a);
+      if (showScore) scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); });
+      if (canAct) bindCandidate(el, a, render, { score: o => { scoreOpts = o.interview ? { interviewId: o.interview.id } : o.existingId ? { existingId: o.existingId } : {}; if (!showScore) setSc(true); else scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); }); $('.cp-scoring', el)?.scrollIntoView({ block: 'nearest' }); } });
+    };
+    await render();
+    // Live updates, but never while someone is typing a scorecard
+    let rt; const unsub = api.subscribe(() => { clearTimeout(rt); rt = setTimeout(() => { const busy = $('#scbody', el)?.dataset.dirty === '1'; if (state.route === 'profile' && !busy) render().catch(() => {}); }, 400); });
+    const stop = () => { if (state.route !== 'profile') { unsub(); document.body.classList.remove('cp-mode'); if (blobUrl) URL.revokeObjectURL(blobUrl); window.removeEventListener('hashchange', stop); } };
+    window.addEventListener('hashchange', stop);
+  }
+
+  // Right-hand panel on the full page: score this candidate, see every scorecard
+  function scoringPanel(host, a, iscores, team, opts, after) {
+    const job = a.jobs || {}; const cfg = scoringCfg(job); const canSetup = ['admin', 'recruiter'].includes(state.me.role);
+    host.dataset.dirty = '0';
+    if (!cfg.criteria.length) {
+      host.innerHTML = `<div class="sp-empty">${icon('check', 22)}<b>No scoring points for this job yet</b><p class="small muted">${canSetup ? 'Add the points interviewers rate (Attitude, Experience with plays, Signal detection…) on the job\'s Interview scoring tab.' : 'Ask a recruiter to add them on the job\'s Interview scoring tab.'}</p>${canSetup ? `<a class="btn sm primary" href="#/jobs/${job.id}?tab=scoring">Set up scoring</a>` : ''}</div>`;
+      return;
+    }
+    team = team || [];
+    const rounds = job.rounds || []; const nR = Math.max(rounds.length, 1);
+    const me = team.find(t => (t.email || '').toLowerCase() === (state.me.email || '').toLowerCase());
+    const ex = opts.existingId ? iscores.find(x => x.id === opts.existingId) : null;
+    const iv0 = opts.interviewId ? (a.interviews || []).find(i => i.id === opts.interviewId) : null;
+    let rno = ex?.round_no || iv0?.round_no || STAGE_ROUND[iv0?.stage_id] || STAGE_ROUND[a.stage_id] || 1;
+    const leadOf = n => rounds[n - 1]?.interviewer_id || null;
+    const who = ex?.member_id || iv0?.team_member_id || me?.id || leadOf(rno) || team[0]?.id || '';
+    const ratings = { ...(ex?.ratings || {}) }; let rec = ex?.recommendation || null; let recTouched = !!ex?.recommendation;
+    const tw = cfg.criteria.reduce((t, x) => t + x.weight, 0) || 1;
+    const mine = x => x.scored_by === state.me.id || ['admin', 'recruiter'].includes(state.me.role);
+    host.innerHTML = `<form class="sp" autocomplete="off">
+        <div class="sp-mode">${ex ? `Editing <b>${esc(ex.scorer_name || 'a scorecard')}</b>'s scorecard` : 'New scorecard'}${ex || iv0 ? ' · <button type="button" class="linkbtn" id="spnew">start a new one</button>' : ''}</div>
+        <div class="grid2"><div class="field"><label for="spr">Round</label><select class="input" id="spr">${Array.from({ length: nR }, (_, k) => k + 1).map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+          <div class="field"><label for="spw">Scored by</label><select class="input" id="spw">${team.map(t => `<option value="${t.id}" ${t.id === who ? 'selected' : ''}>${esc(t.full_name)}</option>`).join('')}<option value="" ${!who ? 'selected' : ''}>${esc(state.me.full_name || 'Me')}</option></select></div></div>
+        <div class="sp-list">${cfg.criteria.map(c => `<div class="sp-item"><div class="sp-name"><b>${esc(c.name)}</b>${cfg.mode === 'weighted' ? `<span class="sp-w">${Math.round(c.weight / tw * 100)}%</span>` : ''}${c.min ? `<span class="tag">needs ${c.min}+</span>` : ''}</div>
+          ${c.hint ? `<div class="small muted">${esc(c.hint)}</div>` : ''}
+          <div class="sp-rate" role="radiogroup" aria-label="${esc(c.name)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" data-k="${c.key}" data-n="${n}" title="${RATE_WORDS[n]}">${n}</button>`).join('')}<span class="sp-word" data-word="${c.key}"></span></div></div>`).join('')}</div>
+        <div class="field"><label for="spn">Notes</label><textarea class="input" id="spn" rows="4" placeholder="Strengths, concerns, what the next interviewer should probe.">${esc(ex?.notes || '')}</textarea></div>
+        <div class="field"><label>Recommendation</label><div class="seg sp-rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['hold', 'Hold'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+        <div class="sp-result" id="spres" aria-live="polite"></div>
+        <div class="row" style="gap:8px">${ex ? '<button type="button" class="btn danger sm" id="spdel">Delete</button>' : ''}<span class="grow"></span><button type="submit" class="btn primary" id="spgo">${ex ? 'Save changes' : 'Save score'}</button></div>
+      </form>
+      ${iscores.length ? `<div class="sp-past"><div class="eyebrow">Scorecards (${iscores.length})</div>${iscores.map(x => `<div class="sp-card ${ex && ex.id === x.id ? 'on' : ''}"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:nowrap"><div style="min-width:0"><b>${esc(x.scorer_name || 'Interviewer')}</b><div class="small muted">Round ${x.round_no || '–'} · ${fmtDate(x.updated_at || x.created_at)}${x.recommendation ? ' · ' + x.recommendation.replace('_', ' ') : ''}</div></div>
+          ${iscoreBadge(x.score, x.verdict, false, IVERDICT[x.verdict]?.[0] || '')}</div>${x.notes ? `<div class="quote">${esc(x.notes)}</div>` : ''}${mine(x) && !(ex && ex.id === x.id) ? `<button type="button" class="linkbtn small" data-spedit="${x.id}">Edit</button>` : ''}</div>`).join('')}</div>` : ''}`;
+    const dirty = () => { host.dataset.dirty = '1'; };
+    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? 'hold' : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
+    const paint = () => { let r; try { r = computeScore(cfg, ratings); } catch (e) { r = { score: null, err: e.message, flags: [], missing: [] }; }
+      $$('[data-k]', host).forEach(b => { const on = ratings[b.dataset.k] === +b.dataset.n; b.classList.toggle('on', on); b.classList.toggle('lit', ratings[b.dataset.k] >= +b.dataset.n); b.setAttribute('aria-checked', on); });
+      $$('[data-word]', host).forEach(w => w.textContent = RATE_WORDS[ratings[w.dataset.word]] || '');
+      if (!recTouched) rec = recFor(r);
+      $$('[data-r]', host).forEach(b => b.classList.toggle('on', b.dataset.r === rec));
+      $('#spres', host).innerHTML = r.err ? `<span class="small" style="color:var(--disq)">The job's scoring formula has a problem: ${esc(r.err)}</span>`
+        : r.score == null ? `<span class="small muted">Rate ${r.missing.length === cfg.criteria.length ? 'each point' : r.missing.length + ' more point' + (r.missing.length > 1 ? 's' : '')} to see the score.</span>`
+        : `${iscoreBadge(r.score, r.verdict, true)}<span class="small">${r.flags.length ? `<b style="color:var(--disq)">No hire:</b> below the minimum on ${esc(r.flags.join(', '))}.` : `Hire at ${cfg.hire}+, Maybe at ${cfg.maybe}+.`}</span>`;
+      return r; };
+    $$('[data-k]', host).forEach(b => b.onclick = () => { ratings[b.dataset.k] = +b.dataset.n; dirty(); paint(); });
+    $$('[data-r]', host).forEach(b => b.onclick = () => { rec = rec === b.dataset.r ? null : b.dataset.r; recTouched = true; dirty(); paint(); });
+    $('#spr', host).onchange = e => { rno = +e.target.value; if (!ex && !iv0 && !me && leadOf(rno)) $('#spw', host).value = leadOf(rno); };
+    $('#spn', host).oninput = dirty;
+    const nw = $('#spnew', host); if (nw) nw.onclick = () => scoringPanel(host, a, iscores, team, {}, after);
+    $$('[data-spedit]', host).forEach(b => b.onclick = () => scoringPanel(host, a, iscores, team, { existingId: b.dataset.spedit }, after));
+    paint();
+    const del = $('#spdel', host);
+    if (del) del.onclick = async () => { if (del.dataset.armed !== '1') { del.dataset.armed = '1'; del.textContent = 'Click again to delete'; return; }
+      try { await api.deleteInterviewScore(ex.id); host.dataset.dirty = '0'; toast('Scorecard deleted'); after?.(); } catch (e) { fail(e); } };
+    $('form', host).onsubmit = async e => { e.preventDefault();
+      const r = paint(); if (r.err) return toast('Fix the scoring formula on the job first.', true);
+      if (r.score == null) return toast(`Rate every point first: ${r.missing.join(', ')}.`, true);
+      const go = $('#spgo', host); go.disabled = true;
+      const wid = $('#spw', host).value; const wm = team.find(t => t.id === wid);
+      const iv = iv0 || [...(a.interviews || [])].reverse().find(i => (i.round_no || STAGE_ROUND[i.stage_id]) === rno && i.status !== 'cancelled');
+      const notes = $('#spn', host).value.trim();
+      try {
+        await api.saveInterviewScore({ ...(ex ? { id: ex.id } : {}), application_id: a.id, job_id: job.id || a.job_id, interview_id: iv?.id || null, round_no: rno,
+          member_id: wid || null, scorer_name: wm?.full_name || state.me.full_name || null, ratings, notes: notes || null, score: r.score, verdict: r.verdict, recommendation: rec });
+        if (iv && iv.status === 'scheduled') { const vals = Object.values(ratings); const avg = Math.round(vals.reduce((t, x) => t + x, 0) / vals.length);
+          try { await api.scorecard(iv.id, { rating: Math.max(1, Math.min(5, avg)), recommendation: rec || recFor(r) || 'no', feedback: [`Interview score ${Math.round(r.score)}/100 (${IVERDICT[r.verdict][0]})`, notes].filter(Boolean).join('\n\n') }); } catch (er) { /* the score itself is saved */ } }
+        host.dataset.dirty = '0'; toast(`Score saved: ${Math.round(r.score)}/100 · ${IVERDICT[r.verdict][0]}`); after?.();
+      } catch (er) { go.disabled = false; fail(er); }
+    };
   }
 
   const MAIL_NAMES = { received: 'application received', rejection: 'rejection', offer: 'offer', hired: 'welcome', interview_invite: 'interview confirmation',
@@ -927,7 +1349,7 @@
     let rating = 0;
     const m = modal('Interview scorecard', `
       <div class="field"><label>Overall rating</label><div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>
-      <div class="field"><label for="rec">Recommendation</label><div class="seg" id="rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label for="rec">Recommendation</label><div class="seg" id="rec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['hold', 'Hold'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
       <div class="field"><label for="fb">Feedback</label><textarea class="input" id="fb" placeholder="Strengths, concerns, and anything the next interviewer should probe."></textarea></div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Submit scorecard</button>`);
     let rec = null;
@@ -1096,11 +1518,11 @@
       <div class="is-list">${cfg.criteria.map(c => `<div class="is-row"><div class="is-name"><b>${esc(c.name)}</b>${c.min ? `<span class="tag">needs ${c.min}+</span>` : ''}${cfg.mode === 'weighted' ? `<span class="small muted">${Math.round(c.weight / cfg.criteria.reduce((t, x) => t + x.weight, 0) * 100)}%</span>` : ''}${c.hint ? `<span class="small muted" style="display:block">${esc(c.hint)}</span>` : ''}</div>
         <div class="rate" role="radiogroup" aria-label="${esc(c.name)}">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" data-k="${c.key}" data-n="${n}" title="${RATE_WORDS[n]}"><b>${n}</b><span>${RATE_WORDS[n]}</span></button>`).join('')}</div></div>`).join('')}</div>
       <div class="field"><label for="isn">Notes</label><textarea class="input" id="isn" rows="3" placeholder="Why these scores? Strengths, concerns, anything the next interviewer should probe.">${esc(ex?.notes || '')}</textarea></div>
-      <div class="field"><label>Your recommendation</label><div class="seg" id="isrec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label>Your recommendation</label><div class="seg" id="isrec" role="group">${[['strong_yes', 'Strong yes'], ['yes', 'Yes'], ['hold', 'Hold'], ['no', 'No'], ['strong_no', 'Strong no']].map(([k, l]) => `<button type="button" data-r="${k}">${l}</button>`).join('')}</div></div>
       <div class="is-result" id="isres" aria-live="polite"></div>`,
       `${ex ? '<button class="btn danger" id="isdel" style="margin-right:auto">Delete</button>' : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">${ex ? 'Save changes' : 'Save score'}</button>`);
     m.el.querySelector('.modal').classList.add('wide');
-    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? null : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
+    const recFor = r => r.score == null ? null : r.verdict === 'hire' ? (r.score >= Math.max(cfg.hire + 15, 85) ? 'strong_yes' : 'yes') : r.verdict === 'maybe' ? 'hold' : (r.score < cfg.maybe / 2 ? 'strong_no' : 'no');
     const paint = () => { let r; try { r = computeScore(cfg, ratings); } catch (e) { r = { score: null, err: e.message, flags: [], missing: [] }; }
       $$('[data-k]', m.el).forEach(b => { const on = ratings[b.dataset.k] === +b.dataset.n; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
       if (!recTouched) rec = recFor(r);
@@ -1273,8 +1695,9 @@
           || `<div class="card empty">${view === 'score' ? 'All caught up: every finished interview has a scorecard.' : view === 'done' ? 'No finished interviews yet.' : view === 'today' ? 'No interviews today.' : 'No upcoming interviews. Move a candidate into a round and they get a link to book.'}</div>`}</div>`;
       $$('[data-view]', el).forEach(b => b.onclick = () => { view = b.dataset.view; draw(); });
       const ws = $('#ivwho', el); if (ws) ws.onchange = () => { who = ws.value; draw(); };
-      $$('[data-score]', el).forEach(b => b.onclick = async e => { e.stopPropagation(); const aid = b.closest('[data-app]')?.dataset.app;
-        if (aid) { try { const a = await api.application(aid); if (scoringCfg(a.jobs).criteria.length) return scoringFlow(a, () => route(), { interview: a.interviews.find(i => i.id === b.dataset.score) }); } catch (er) { /* fall back */ } }
+      $$('[data-score]', el).forEach(b => b.onclick = e => { e.stopPropagation(); const aid = b.closest('[data-app]')?.dataset.app;
+        const iv = all.find(x => x.id === b.dataset.score);
+        if (aid && scoringCfg(iv?.applications?.jobs).criteria.length) return openProfileTab(aid, `iv=${b.dataset.score}`);
         scorecardFlow(b.dataset.score, () => route()); });
       $$('[data-stop]', el).forEach(b => b.onclick = e => e.stopPropagation());
       $$('[data-open]', el).forEach(b => b.onclick = e => { e.stopPropagation(); openCandidate(b.dataset.open); });
@@ -1453,6 +1876,70 @@
     };
     draw();
   }
+  // Job create/edit form → Candidate emails: pick Default or a version just for this job. Nothing is saved until the job is saved.
+  async function jobTemplatesEditor(host, job, getSender, getTitle) {
+    let defs = [], own0 = [];
+    try { [defs, own0] = await Promise.all([api.templates(), job?.id ? api.jobTemplates(job.id) : []]); } catch (e) { host.innerHTML = '<div class="small muted">Could not load the email templates. You can still set them later on the job\'s Emails tab.</div>'; return { value: () => ({ changes: [] }) }; }
+    const own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
+    const order = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
+    const st = Object.fromEntries(ts.map(t => { const o = own[t.key];
+      // A job row that only switches an email off (same wording as the default) still counts as "Default"
+      return [t.key, { custom: !!o && (o.subject !== t.subject || o.body !== t.body), subject: (o || t).subject || '', body: (o || t).body || '', enabled: (o ? o.enabled : t.enabled) !== false, defOn: t.enabled !== false }]; }));
+    const open = new Set();
+    const draw = () => {
+      const nCustom = ts.filter(t => st[t.key].custom || st[t.key].enabled !== st[t.key].defOn).length;
+      host.innerHTML = `<div class="small muted">Every email starts on the default from Settings → Email templates. Switch one to <b>Custom for this job</b> to write this job's own version; the others keep following the defaults.${nCustom ? ` <b>${nCustom} customised for this job.</b>` : ''}</div>
+        <div class="jt-list">${ts.map(t => { const s = st[t.key], info = TEMPLATE_INFO[t.key] || { title: t.key, when: '', ph: BASE_PH };
+          return `<div class="jt-item ${open.has(t.key) ? 'open' : ''} ${s.enabled ? '' : 'off'}" data-k="${t.key}">
+            <div class="jt-row"><button type="button" class="jt-tog" data-open="${t.key}" aria-expanded="${open.has(t.key)}"><span class="jt-car">${open.has(t.key) ? '▾' : '▸'}</span><span><b>${esc(info.title)}</b>${s.custom ? ' <span class="chip v-pass">Custom</span>' : ''}${s.enabled ? '' : ' <span class="chip v-review">Off</span>'}<span class="small muted" style="display:block">${esc(info.when)}</span></span></button>
+              <div class="seg sm" role="group" aria-label="${esc(info.title)} email"><button type="button" data-mode="def" class="${s.custom ? '' : 'on'}">Default</button><button type="button" data-mode="cus" class="${s.custom ? 'on' : ''}">Custom for this job</button></div>
+              <label class="row small" style="gap:6px;white-space:nowrap"><input type="checkbox" data-on ${s.enabled ? 'checked' : ''}> Send</label></div>
+            ${open.has(t.key) ? `<div class="jt-body">
+              <div class="field"><label>Subject</label><input class="input" data-subj value="${esc(s.subject)}" ${s.custom ? '' : 'disabled'}></div>
+              <div class="field"><label>Message</label><textarea class="input" rows="8" data-body ${s.custom ? '' : 'disabled'}>${esc(s.body)}</textarea></div>
+              ${s.custom ? `<div class="row" style="gap:6px"><span class="small muted">Insert:</span>${[...info.ph, 'sender_name'].filter((p, i, a) => a.indexOf(p) === i).map(p => `<button type="button" class="tag ph" data-ph="${p}">{{${p}}}</button>`).join('')}</div>`
+                : '<div class="small muted">This is the default wording. Choose <b>Custom for this job</b> to change it for this job only.</div>'}
+              <div><button type="button" class="btn sm ghost" data-prev>Preview</button><div class="preview" data-preview hidden></div></div></div>` : ''}</div>`; }).join('')}</div>`;
+      $$('.jt-item', host).forEach(el => { const k = el.dataset.k, s = st[k], def = ts.find(t => t.key === k);
+        $('[data-open]', el).onclick = () => { open.has(k) ? open.delete(k) : open.add(k); draw(); };
+        $$('[data-mode]', el).forEach(b => b.onclick = () => { const c = b.dataset.mode === 'cus'; if (c === s.custom) return;
+          s.custom = c; if (!c) { s.subject = def.subject || ''; s.body = def.body || ''; } open.add(k); draw();
+          if (c) $('[data-body]', $(`.jt-item[data-k="${k}"]`, host))?.focus(); });
+        $('[data-on]', el).onchange = e => { s.enabled = e.target.checked; draw(); };
+        const subj = $('[data-subj]', el), body = $('[data-body]', el); let last = body;
+        if (subj) { subj.oninput = () => s.subject = subj.value; subj.onfocus = () => last = subj; }
+        if (body) { body.oninput = () => s.body = body.value; body.onfocus = () => last = body; }
+        $$('[data-ph]', el).forEach(b => b.onclick = () => { const f = last || body, ins = `{{${b.dataset.ph}}}`, a = f.selectionStart ?? f.value.length, z = f.selectionEnd ?? a;
+          f.value = f.value.slice(0, a) + ins + f.value.slice(z); f.dispatchEvent(new Event('input')); f.focus(); f.selectionStart = f.selectionEnd = a + ins.length; });
+        const pv = $('[data-prev]', el); if (pv) pv.onclick = () => { const box = $('[data-preview]', el);
+          const smp = x => fillSample(String(x).replace(/\{\{\s*job_title\s*\}\}/g, getTitle() || SAMPLE.job_title).replace(/\{\{\s*sender_name\s*\}\}/g, getSender()));
+          box.hidden = !box.hidden; pv.textContent = box.hidden ? 'Preview' : 'Hide preview';
+          box.innerHTML = `<div class="small muted">Example with sample details · from ${esc(getSender())}</div><b>${esc(smp(s.subject))}</b><div style="white-space:pre-wrap;margin-top:8px">${esc(smp(s.body))}</div>`; }; });
+    };
+    draw();
+    return {
+      value() {
+        const changes = [];
+        for (const t of ts) { const s = st[t.key], o = own[t.key], info = TEMPLATE_INFO[t.key] || {};
+          const needRow = s.custom || s.enabled !== s.defOn;
+          if (needRow) {
+            const subject = (s.custom ? s.subject : t.subject || '').trim(), body = (s.custom ? s.body : t.body || '').trim();
+            if (!subject || !body) return { error: `The ${info.title || t.key} email needs a subject and a message.`, key: t.key };
+            if (info.need && s.enabled && !body.includes(`{{${info.need}}}`)) return { error: `Keep {{${info.need}}} in the ${info.title} email, or candidates cannot book their interview.`, key: t.key };
+            if (!o || o.subject !== subject || o.body !== body || (o.enabled !== false) !== s.enabled) changes.push({ key: t.key, data: { subject, body, enabled: s.enabled } });
+          } else if (o) changes.push({ key: t.key, reset: true });
+        }
+        return { changes };
+      },
+      show(key) { open.add(key); draw(); $(`.jt-item[data-k="${key}"]`, host)?.scrollIntoView({ block: 'center' }); }
+    };
+  }
+  async function saveJobTemplates(jobId, changes) {
+    const bad = [];
+    for (const c of changes) { try { c.reset ? await api.resetJobTemplate(jobId, c.key) : await api.saveJobTemplate(jobId, c.key, c.data); } catch (e) { bad.push(c.key); } }
+    return bad;
+  }
   // Ask before throwing away a job's own version of an email: click twice (no browser dialog)
   let resetPending = null;
   function confirmReset(title) {
@@ -1605,10 +2092,11 @@
   async function settings(el, _a, params) {
     const tab = params.get('tab') || 'panel';
     el.innerHTML = `<div class="page-head"><div><h1>Settings</h1><p>Interview panel, team access, candidate emails and automation connections.</p></div></div>
-      <div class="tabs">${[['panel', 'Interview panel'], ['team', 'Logins'], ['emails', 'Email templates'], ['auto', 'Automation']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div><div id="sb"></div>`;
+      <div class="tabs">${[['panel', 'Interview panel'], ['team', 'Logins'], ['emails', 'Email templates'], ['auto', 'Automation'], ['look', 'Appearance']].map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div><div id="sb"></div>`;
     $$('[data-t]', el).forEach(b => b.onclick = () => location.hash = `#/settings?tab=${b.dataset.t}`);
     const sb = $('#sb');
     if (tab === 'panel') return panelSettings(sb);
+    if (tab === 'look') return appearanceSettings(sb);
     if (tab === 'team') {
       const ps = await api.profiles();
       sb.innerHTML = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Person</th><th>Email</th><th>Role</th></tr></thead><tbody>${ps.map(p => `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(p.full_name, 30)}<b>${esc(p.full_name)}</b></div></td><td class="muted">${esc(p.email)}</td>
