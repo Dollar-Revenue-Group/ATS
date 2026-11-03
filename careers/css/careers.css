@@ -41,3 +41,7 @@ body{display:flex;flex-direction:column;min-height:100vh}
 .phone-row select.input{padding-right:28px;text-overflow:ellipsis}
 .phone-row input.input{font-size:17px;letter-spacing:.02em}
 @media (max-width:420px){.phone-row{grid-template-columns:minmax(0,1fr)}}
+
+.money-row{display:grid;grid-template-columns:minmax(190px,280px) minmax(0,1fr);gap:8px;max-width:560px}
+.money-row select.input{padding-right:28px;text-overflow:ellipsis}
+@media (max-width:420px){.money-row{grid-template-columns:minmax(0,1fr)}}

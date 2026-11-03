@@ -236,7 +236,7 @@
   const bindApps = el => $$('[data-app]', el).forEach(n => { n.onclick = () => openCandidate(n.dataset.app); n.onkeydown = e => e.key === 'Enter' && openCandidate(n.dataset.app); });
 
   /* ───────── jobs ───────── */
-  const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#178A35', '#5DBB2C', '#8FBF1F', '#B4720E', '#1C8B57'];
+  const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#3B82C4', '#178A35', '#3FA62E', '#5DBB2C', '#8FBF1F', '#B5C91A', '#B4720E', '#1C8B57'];
   async function jobsPage(el, _a, params) {
     const jobs = state.jobs = await api.jobs();
     const canEdit = ['admin', 'recruiter'].includes(state.me.role);
@@ -253,8 +253,8 @@
           <div class="job-top"><div><h3>${esc(j.title)}${j.client ? ` <span class="chip ext" style="font-size:11px;vertical-align:middle">${esc(j.client)}</span>` : ''}</h3><div class="small muted" style="margin-top:4px">${esc(j.department || '')} · ${esc(j.location || '')}</div></div>
             <span class="chip st-${j.status}">${j.status.replace('_', ' ')}</span></div>
           <div><div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">Pipeline</span><span class="small num">${active} active</span></div>
-            <div class="stagebar">${[1, 2, 3, 4, 8, 5, 6].map((s, k) => `<i style="width:${(j.byStage[s] || 0) / Math.max(1, active) * 100}%;background:${STAGE_COLORS[k]}" title="${stageName(s)}: ${j.byStage[s] || 0}"></i>`).join('')}</div></div>
-          <div class="job-foot"><span>${j.rules === null ? '<span style="color:var(--review)">No AI brief yet</span>' : `${j.byStage[2] || 0} screened · ${(j.byStage[3] || 0) + (j.byStage[4] || 0) + (j.byStage[8] || 0)} interviewing`}</span><span>${fmtDate(j.created_at)}</span></div>
+            <div class="stagebar">${[1, 2, 9, 3, 4, 8, 10, 11, 5, 6].map((s, k) => `<i style="width:${(j.byStage[s] || 0) / Math.max(1, active) * 100}%;background:${STAGE_COLORS[k]}" title="${stageName(s)}: ${j.byStage[s] || 0}"></i>`).join('')}</div></div>
+          <div class="job-foot"><span>${j.rules === null ? '<span style="color:var(--review)">No AI brief yet</span>' : `${j.byStage[2] || 0} screened · ${[3, 4, 8, 10, 11].reduce((t, s) => t + (j.byStage[s] || 0), 0)} interviewing`}</span><span>${fmtDate(j.created_at)}</span></div>
         </article>`; }).join('') || `<div class="card empty">${only ? `No ${only.replace('_', ' ')} roles right now.` : 'No jobs yet. Create the first role to start screening.'}</div>`}</div>`;
     $$('[data-job]', el).forEach(n => { n.onclick = () => location.hash = `#/jobs/${n.dataset.job}`; n.onkeydown = e => e.key === 'Enter' && n.click(); });
     if (canEdit) $('#newjob').onclick = () => jobForm();
@@ -452,7 +452,7 @@
   }
 
   /* Hiring panel and interview rounds: shared editor used by the New job form and the job's tab */
-  const ROUND_NAMES = ['Intro call', 'Skills interview', 'Final interview'];
+  const ROUND_NAMES = ['Intro call', 'Skills interview', 'Final interview', 'Round 4 interview', 'Round 5 interview'];
   // Who sends what: the booking link a candidate gets for a round with this interviewer
   const linkSource = t => !t ? '' : t.cal_account ? `${firstName(t.full_name)}'s Cal.com` : t.booking_url ? `${firstName(t.full_name)}'s booking page` : 'the ATS booking page';
   const firstName = n => String(n || '').trim().split(' ')[0];
@@ -498,7 +498,7 @@
         <div class="field"><span class="lbl" style="font-size:13px;font-weight:600">Coordinators</span>
           <div class="small muted">Get an email whenever a candidate enters a round, together with that round's interviewer, so they can call the candidate and make sure they book. Leave empty for no round emails.</div>
           <div class="iv-picks" role="group" aria-label="Coordinators" style="margin-top:4px">${team.filter(t => t.active !== false).map(t => `<label class="iv-pick ${st.coord.includes(t.id) ? 'on' : ''}"><input type="checkbox" data-co="${t.id}" ${st.coord.includes(t.id) ? 'checked' : ''} ${dis}>${esc(t.full_name)}</label>`).join('')}</div></div>
-        <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
+        <div class="field" style="max-width:220px"><label for="rc">Interview rounds</label><select class="input" id="rc" ${dis}>${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}" ${st.rounds.length === n ? 'selected' : ''}>${n === 0 ? 'Not set' : n + (n === 1 ? ' round' : ' rounds')}</option>`).join('')}</select></div>
         <div class="small muted" style="margin-top:-6px">Moving a candidate into a round emails them the interviewer's link to book a time. Anyone else can join the call from the shared calendar.</div>
         ${st.rounds.map((rd, i) => { const t = byId(rd.interviewer_id);
           return `<div class="round-row"><span class="round-n">Round ${i + 1}</span>
@@ -628,7 +628,7 @@
   }
 
   /* Custom application form for one job */
-  const FIELD_TYPES = [['text', 'Short answer'], ['textarea', 'Long answer'], ['url', 'Link (e.g. Loom, portfolio)'], ['email', 'Email'], ['number', 'Number'], ['select', 'Pick one'], ['file', 'File upload']];
+  const FIELD_TYPES = [['text', 'Short answer'], ['textarea', 'Long answer'], ['url', 'Link (e.g. Loom, portfolio)'], ['email', 'Email'], ['number', 'Number'], ['money', 'Amount with currency (shown in USD too)'], ['select', 'Pick one'], ['file', 'File upload']];
   function formBuilder(body, job, canEdit) {
     let fields = JSON.parse(JSON.stringify(job.form_fields || []));
     const dis = canEdit ? '' : 'disabled';
@@ -884,6 +884,42 @@
       ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
       ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}`;
   }
+  /* Salary answers: read "1200000 PKR" (or older free text like "165k PKR") and show it in USD at today's rate */
+  const CUR_SYM = { '$': 'USD', '₹': 'INR', '€': 'EUR', '£': 'GBP', 'rs': 'INR', 'rs.': 'INR' };
+  const MULT = { k: 1e3, thousand: 1e3, l: 1e5, lac: 1e5, lakh: 1e5, lakhs: 1e5, lacs: 1e5, m: 1e6, mn: 1e6, million: 1e6, cr: 1e7, crore: 1e7, crores: 1e7 };
+  function moneyOf(q) {
+    const v = String(q?.value || '').trim(); if (!v || v.length > 60) return null;
+    if (q.type !== 'money' && !/ctc|salary|compensation|pay|package|income/i.test(q.label || '')) return null;
+    const m = v.match(/^([A-Za-z]{3}|[$₹€£]|rs\.?)?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|l|lacs?|lakhs?|m|mn|million|thousand|cr|crores?)?\.?\s*([A-Za-z]{3}|[$₹€£])?(?:\s*(?:\/|per|a)\s*(\w+))?\s*$/i);
+    if (!m) return null;
+    const code = x => !x ? null : CUR_SYM[x.toLowerCase()] || (/^[A-Za-z]{3}$/.test(x) ? x.toUpperCase() : null);
+    const cur = code(m[4]) || code(m[1]); if (!cur || !/^[A-Z]{3}$/.test(cur)) return null;
+    const amount = parseFloat(m[2].replace(/,/g, '')) * (MULT[(m[3] || '').toLowerCase()] || 1);
+    return amount > 0 ? { amount, cur, per: m[5] ? ' / ' + m[5].toLowerCase() : '' } : null;
+  }
+  const fmtMoney = (n, cur) => `${Math.round(n).toLocaleString('en-US')} ${cur}`;
+  // Exchange rates (US dollar base) from open.er-api.com, refreshed once a day and kept in this browser
+  let fxP = null;
+  function fxRates() {
+    if (fxP) return fxP;
+    const today = new Date().toISOString().slice(0, 10);
+    try { const c = JSON.parse(localStorage.getItem('ats.fx') || 'null'); if (c && c.day === today && c.rates) return (fxP = Promise.resolve(c)); } catch (e) { /* no cache */ }
+    fxP = fetch('https://open.er-api.com/v6/latest/USD').then(r => r.json()).then(j => {
+      if (j.result !== 'success' || !j.rates) throw new Error('no rates');
+      const c = { day: today, at: j.time_last_update_unix * 1000, rates: j.rates };
+      try { localStorage.setItem('ats.fx', JSON.stringify(c)); } catch (e) { /* storage off */ }
+      return c; }).catch(e => { fxP = null; throw e; });
+    return fxP;
+  }
+  function fillFx(root) {
+    const els = $$('[data-fx-amt]', root); if (!els.length) return;
+    fxRates().then(fx => els.forEach(el => { const r = fx.rates[el.dataset.fxCur];
+      if (!r) { el.textContent = ''; return; }
+      const usd = +el.dataset.fxAmt / r;
+      el.innerHTML = `<b class="fx-usd">≈ ${usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</b> <span class="small muted">at 1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur}</span>`;
+      el.title = `1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur} · rate of ${new Date(fx.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }))
+      .catch(() => els.forEach(el => { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); }));
+  }
   function candidateBody(a, iscores, canAct, mode) {
     const c = a.candidates || {}; const sc = a.screening; const failed = failedMailsOf(a);
     return `${mode === 'page' ? '' : scoringCard(a, iscores)}
@@ -901,7 +937,9 @@
             <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
         : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
       ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
-        ${(a.form_answers || []).map(q => `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>` : esc(q.value)}</div></div>`).join('')}
+        ${(a.form_answers || []).map(q => { const m = moneyOf(q);
+          return `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>`
+            : m ? `${esc(fmtMoney(m.amount, m.cur) + m.per)}${m.cur !== 'USD' ? ` <span class="fx" data-fx-amt="${m.amount}" data-fx-cur="${m.cur}"></span>` : ''}` : esc(q.value)}</div></div>`; }).join('')}
         ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
       ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
         ${c.profile_summary ? `<p class="prose">${esc(c.profile_summary)}</p>` : ''}
@@ -919,6 +957,7 @@
   // Wires the stage select and action buttons; `hooks` decides how scoring opens (new tab from the drawer, the right panel on the full page)
   function bindCandidate(root, a, render, hooks) {
     const id = a.id, c = a.candidates || {};
+    fillFx(root);
     const again = () => { render(); state.redraw?.(); };
     const mv = $('#mv', root);
     if (mv) mv.onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, again); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); again(); } catch (er) { fail(er); } };
@@ -1302,7 +1341,7 @@
   }
 
   const MAIL_NAMES = { received: 'application received', rejection: 'rejection', offer: 'offer', hired: 'welcome', interview_invite: 'interview confirmation',
-    interviewer_notice: 'interviewer notice', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_5: 'offer', stage_6: 'welcome' };
+    interviewer_notice: 'interviewer notice', stage_9: 'Manual Screened', stage_3: 'Round 1 booking link', stage_4: 'Round 2 booking link', stage_8: 'Round 3 booking link', stage_10: 'Round 4 booking link', stage_11: 'Round 5 booking link', stage_5: 'offer', stage_6: 'welcome' };
   const mailName = k => MAIL_NAMES[k] || String(k).replace(/_/g, ' ');
 
   function rejectFlow(id, after) {
@@ -1334,7 +1373,7 @@
     const local = new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
     const m = modal('Schedule interview', `
       <p class="small muted" style="margin:0">Use this when you have already agreed a time with the candidate. Otherwise just move them to the round: they get an email to book a time themselves.</p>
-      <div class="grid2"><div class="field"><label for="ss">Round</label><select class="input" id="ss">${[1, 2, 3].map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
+      <div class="grid2"><div class="field"><label for="ss">Round</label><select class="input" id="ss">${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === rno ? 'selected' : ''}>Round ${n}${rounds[n - 1]?.name ? ' · ' + esc(rounds[n - 1].name) : ''}</option>`).join('')}</select></div>
         <div class="field"><label for="sd">Length</label><select class="input" id="sd">${[15, 30, 45, 60, 90].map(x => `<option value="${x}">${x} min</option>`).join('')}</select></div></div>
       <div class="field"><label for="st">Date and time (your computer's time zone)</label><input class="input" type="datetime-local" id="st" value="${local}"></div>
       <div class="field"><label for="si">Interviewer</label><select class="input" id="si">${active.map(t => `<option value="${t.id}">${esc(t.full_name)}${t.title ? ' · ' + esc(t.title) : ''}</option>`).join('')}</select></div>
@@ -1729,10 +1768,13 @@
   const ROUND_PH = [...BASE_PH, 'round_name', 'round_number', 'interviewer_name', 'duration', 'booking_link'];
   const TEMPLATE_INFO = {
     received: { title: 'Applied', when: 'Sent when a candidate applies on the careers site or you upload their resume.', ph: BASE_PH },
-    screened: { title: 'Screened', when: 'Sent when a candidate moves to Screened. Off by default: the AI moves every new applicant to Screened, so switching this on emails everyone once they are scored.', ph: BASE_PH },
+    screened: { title: 'Screened', when: 'Off for every job: the AI moves every new applicant to Screened, so no email is sent here. Candidates get the Manual Screened email once you have reviewed them.', ph: BASE_PH },
+    manual_screened: { title: 'Manual Screened', when: 'Sent when you move a candidate to Manual Screened after reviewing them yourself. On by default; switch it off on any job that should not send it.', ph: BASE_PH },
     round_1: { title: 'Round 1', when: "Sent when a candidate is moved to Round 1. Includes the link to book a time with Round 1's interviewer (set on each job under Panel and rounds).", ph: ROUND_PH, need: 'booking_link' },
     round_2: { title: 'Round 2', when: "Sent when a candidate is moved to Round 2, with the booking link for Round 2's interviewer.", ph: ROUND_PH, need: 'booking_link' },
     round_3: { title: 'Round 3', when: "Sent when a candidate is moved to Round 3, with the booking link for Round 3's interviewer.", ph: ROUND_PH, need: 'booking_link' },
+    round_4: { title: 'Round 4', when: "Sent when a candidate is moved to Round 4, with the booking link for Round 4's interviewer.", ph: ROUND_PH, need: 'booking_link' },
+    round_5: { title: 'Round 5', when: "Sent when a candidate is moved to Round 5, with the booking link for Round 5's interviewer.", ph: ROUND_PH, need: 'booking_link' },
     offer: { title: 'Offer', when: 'Sent when a candidate is moved to Offer.', ph: BASE_PH },
     hired: { title: 'Hired', when: 'Sent when a candidate is moved to Hired.', ph: BASE_PH },
     rejection: { title: 'Rejected', when: 'Sent when you reject a candidate with "Send the rejection email" ticked. {{rejection_reason}} is the reason entered in the reject pop-up.', ph: [...BASE_PH, 'rejection_reason'] },
@@ -1744,7 +1786,7 @@
   const fillSample = s => String(s || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => SAMPLE[k] ?? '');
   async function templateSettings(sb) {
     const ts = (await api.templates()).filter(t => t.key !== 'round_invite');
-    const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'round_4', 'round_5', 'offer', 'hired', 'rejection', 'interview_invite'];
     ts.sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     sb.innerHTML = `<div id="senders"></div><div class="card card-b small muted" style="margin-bottom:14px">These are the default emails for every job. Each pipeline stage has its own email, and it goes out automatically when a candidate enters that stage. Click a placeholder to insert it; it is filled in for each candidate. Switch a stage off to stop its email. A job can have its own wording and sender on its <b>Emails</b> tab.</div>
       <div style="display:grid;gap:14px">${ts.map(t => { const info = TEMPLATE_INFO[t.key] || { title: t.label || t.key, when: '', ph: BASE_PH }; const on = t.enabled !== false;
@@ -1832,8 +1874,9 @@
   async function jobEmails(body, job, canEdit) {
     const [defs, own0, senders] = await Promise.all([api.templates(), api.jobTemplates(job.id), api.senders().catch(() => [])]);
     let own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
-    const stageOrder = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
-    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
+    const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'round_4', 'round_5', 'offer', 'hired', 'rejection', 'interview_invite'];
+    // Screened never emails (switched off for every job), so it is not offered per job
+    const ts = defs.filter(t => !['round_invite', 'screened'].includes(t.key)).sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     const dis = canEdit ? '' : 'disabled';
     const active = senders.filter(s => s.active !== false || s.id === job.sender_id);
     const cur = () => senders.find(s => s.id === job.sender_id) || senders.find(s => s.is_default) || { from_name: 'DRG Talent Team' };
@@ -1841,9 +1884,11 @@
       ? `Candidates see <b>${esc(s.from_name)}</b> &lt;${esc(s.from_email)}&gt;${s.reply_to ? ` and replies go to ${esc(s.reply_to)}` : ''}. ${esc(s.from_email)} must be set up as a "Send mail as" address on the hiring mailbox (Settings → Email templates explains how); until then emails go out from the hiring mailbox address with this name.`
       : `Candidates see <b>${esc(s.from_name)}</b> from the hiring mailbox.`; };
     const card = t => { const info = TEMPLATE_INFO[t.key] || { title: t.key, when: '', ph: BASE_PH }, o = own[t.key], src = o || t, on = (o ? o.enabled : t.enabled) !== false;
+      const custom = !!o && (o.subject !== t.subject || o.body !== t.body);
       return `<details class="card tpl ${on ? '' : 'off'}" data-jt="${t.key}"><summary class="card-h" style="cursor:pointer;list-style:none">
-          <div><h3>${esc(info.title)} ${o ? '<span class="chip v-pass">Custom for this job</span>' : '<span class="chip">Default</span>'}${on ? '' : ' <span class="chip v-review">Off for this job</span>'}</h3>
-            <div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div><span class="small muted">${canEdit ? 'Edit' : 'View'} ▾</span></summary>
+          <div><h3>${esc(info.title)} ${custom ? '<span class="chip v-pass">Custom for this job</span>' : '<span class="chip">Default</span>'}${on ? '' : ' <span class="chip v-review">Off for this job</span>'}</h3>
+            <div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div>
+          <span class="row" style="gap:12px;white-space:nowrap"><label class="row small jt-switch" style="gap:6px" title="Send this email for this job"><input type="checkbox" data-jsw="${t.key}" ${on ? 'checked' : ''} ${dis}> ${on ? 'On' : 'Off'}</label><span class="small muted">${canEdit ? 'Edit' : 'View'} ▾</span></span></summary>
         <div class="card-b" style="display:grid;gap:10px">
           <div class="field"><label for="js-${t.key}">Subject</label><input class="input" id="js-${t.key}" data-subj="${t.key}" value="${esc(src.subject)}" ${dis}></div>
           <div class="field"><label for="jb-${t.key}">Message</label><textarea class="input" rows="9" id="jb-${t.key}" data-body="${t.key}" ${dis}>${esc(src.body)}</textarea></div>
@@ -1875,7 +1920,14 @@
         const smp = s => fillSample(String(s).replace(/\{\{\s*job_title\s*\}\}/g, job.title).replace(/\{\{\s*sender_name\s*\}\}/g, cur().from_name));
         box.hidden = !box.hidden; b.textContent = box.hidden ? 'Preview' : 'Hide preview';
         box.innerHTML = `<div class="small muted">Example with sample details · from ${esc(cur().from_name)}</div><b>${esc(smp($(`[data-subj="${k}"]`, body).value))}</b><div style="white-space:pre-wrap;margin-top:8px">${esc(smp($(`[data-body="${k}"]`, body).value))}</div>`; });
+      $$('[data-jsw]', body).forEach(c => { const lab = c.closest('label'); lab.onclick = e => e.stopPropagation(); });
       if (!canEdit) return;
+      // Header switch: turn this email on or off for this job straight away (keeps the job's wording, or the default wording)
+      $$('[data-jsw]', body).forEach(c => c.onchange = async () => { const k = c.dataset.jsw, info = TEMPLATE_INFO[k] || {}, def = ts.find(t => t.key === k) || {}, o = own[k];
+        const subject = (o || def).subject || '', text = (o || def).body || '';
+        c.disabled = true;
+        try { own[k] = await api.saveJobTemplate(job.id, k, { subject, body: text, enabled: c.checked }); draw(); toast(`${info.title || k} email ${c.checked ? 'switched on' : 'switched off'} for this job`); }
+        catch (e) { c.checked = !c.checked; c.disabled = false; fail(e); } });
       $$('[data-save]', body).forEach(b => b.onclick = async () => { const k = b.dataset.save, info = TEMPLATE_INFO[k] || {};
         const subject = $(`[data-subj="${k}"]`, body).value.trim(), text = $(`[data-body="${k}"]`, body).value.trim(), enabled = $(`[data-jon="${k}"]`, body).checked;
         if (!subject || !text) return toast('Add a subject and a message.', true);
@@ -1896,8 +1948,8 @@
     let defs = [], own0 = [];
     try { [defs, own0] = await Promise.all([api.templates(), job?.id ? api.jobTemplates(job.id) : []]); } catch (e) { host.innerHTML = '<div class="small muted">Could not load the email templates. You can still set them later on the job\'s Emails tab.</div>'; return { value: () => ({ changes: [] }) }; }
     const own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
-    const order = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
-    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
+    const order = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'round_4', 'round_5', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const ts = defs.filter(t => !['round_invite', 'screened'].includes(t.key)).sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
     const st = Object.fromEntries(ts.map(t => { const o = own[t.key];
       // A job row that only switches an email off (same wording as the default) still counts as "Default"
       return [t.key, { custom: !!o && (o.subject !== t.subject || o.body !== t.body), subject: (o || t).subject || '', body: (o || t).body || '', enabled: (o ? o.enabled : t.enabled) !== false, defOn: t.enabled !== false }]; }));

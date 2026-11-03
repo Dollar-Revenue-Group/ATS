@@ -17,6 +17,18 @@
     ['QA','Qatar','974'],['RO','Romania','40'],['SA','Saudi Arabia','966'],['RS','Serbia','381'],['SG','Singapore','65'],['SK','Slovakia','421'],['ZA','South Africa','27'],
     ['KR','South Korea','82'],['ES','Spain','34'],['LK','Sri Lanka','94'],['SE','Sweden','46'],['CH','Switzerland','41'],['TW','Taiwan','886'],['TZ','Tanzania','255'],
     ['TH','Thailand','66'],['TR','Türkiye','90'],['UG','Uganda','256'],['UA','Ukraine','380'],['UZ','Uzbekistan','998'],['VN','Vietnam','84']];
+  // Amount-with-currency questions: currency list, and each country's usual currency (for the default choice)
+  const CURRENCIES = [['USD', 'US dollar'], ['INR', 'Indian rupee'], ['PKR', 'Pakistani rupee'], ['EUR', 'Euro'], ['GBP', 'British pound'], ['AED', 'UAE dirham'],
+    ['CAD', 'Canadian dollar'], ['AUD', 'Australian dollar'], ['SGD', 'Singapore dollar'], ['SAR', 'Saudi riyal'], ['QAR', 'Qatari riyal'], ['KWD', 'Kuwaiti dinar'],
+    ['BHD', 'Bahraini dinar'], ['OMR', 'Omani rial'], ['BDT', 'Bangladeshi taka'], ['LKR', 'Sri Lankan rupee'], ['NPR', 'Nepalese rupee'], ['PHP', 'Philippine peso'],
+    ['MYR', 'Malaysian ringgit'], ['IDR', 'Indonesian rupiah'], ['THB', 'Thai baht'], ['VND', 'Vietnamese dong'], ['NGN', 'Nigerian naira'], ['KES', 'Kenyan shilling'],
+    ['ZAR', 'South African rand'], ['EGP', 'Egyptian pound'], ['TRY', 'Turkish lira'], ['NZD', 'New Zealand dollar'], ['CHF', 'Swiss franc'], ['JPY', 'Japanese yen'],
+    ['CNY', 'Chinese yuan'], ['HKD', 'Hong Kong dollar'], ['BRL', 'Brazilian real'], ['MXN', 'Mexican peso'], ['PLN', 'Polish zloty'], ['SEK', 'Swedish krona']];
+  const COUNTRY_CUR = { IN: 'INR', PK: 'PKR', US: 'USD', GB: 'GBP', AE: 'AED', CA: 'CAD', AU: 'AUD', SG: 'SGD', SA: 'SAR', QA: 'QAR', KW: 'KWD', BH: 'BHD', OM: 'OMR',
+    BD: 'BDT', LK: 'LKR', NP: 'NPR', PH: 'PHP', MY: 'MYR', ID: 'IDR', TH: 'THB', VN: 'VND', NG: 'NGN', KE: 'KES', ZA: 'ZAR', EG: 'EGP', TR: 'TRY', NZ: 'NZD', CH: 'CHF',
+    JP: 'JPY', CN: 'CNY', HK: 'HKD', BR: 'BRL', MX: 'MXN', PL: 'PLN', SE: 'SEK', DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', NL: 'EUR', IE: 'EUR', BE: 'EUR', AT: 'EUR',
+    PT: 'EUR', FI: 'EUR', GR: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', SK: 'EUR', CY: 'EUR', HR: 'EUR' };
+  const curOptions = sel => CURRENCIES.map(([c, n]) => `<option value="${c}" ${c === sel ? 'selected' : ''}>${c} · ${n}</option>`).join('');
   const flag = iso => String.fromCodePoint(...[...iso].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
   const guessCountry = () => { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
     const m = { 'Asia/Kolkata': 'IN', 'Asia/Calcutta': 'IN', 'Asia/Karachi': 'PK', 'Asia/Dubai': 'AE', 'Europe/London': 'GB', 'Asia/Dhaka': 'BD', 'Asia/Colombo': 'LK',
@@ -139,6 +151,9 @@
     const aria = `${f.required ? 'required aria-required="true"' : ''} ${f.help ? `aria-describedby="${id}_h"` : ''}`;
     if (f.type === 'textarea') return `<div class="field"><label for="${id}">${esc(f.label)}${req}</label>${help}<textarea class="input" id="${id}" data-q="${esc(f.id)}" rows="4" maxlength="4000" ${aria}></textarea></div>`;
     if (f.type === 'select') return `<div class="field"><label for="${id}">${esc(f.label)}${req}</label>${help}<select class="input" id="${id}" data-q="${esc(f.id)}" ${aria}><option value="">Choose…</option>${(f.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select></div>`;
+    if (f.type === 'money') return `<div class="field"><label for="${id}">${esc(f.label)}${req}</label>${help}
+      <div class="money-row"><select class="input" data-cur="${esc(f.id)}" aria-label="${esc(f.label)} currency">${curOptions(COUNTRY_CUR[guessCountry()] || 'USD')}</select>
+        <input class="input" id="${id}" data-q="${esc(f.id)}" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 1200000" maxlength="20" ${aria}></div></div>`;
     if (f.type === 'file') return `<div class="field"><span class="lbl" style="font-weight:600;font-size:13px">${esc(f.label)}${req}</span>${help}
       <label class="file-pick"><input type="file" data-file="${esc(f.id)}" accept=".pdf,.docx,.png,.jpg,.jpeg" ${aria}><span>📎</span><b data-fname="${esc(f.id)}">Choose a file</b><span class="small muted">PDF, DOCX, PNG or JPG · up to 5 MB</span></label></div>`;
     const type = { url: 'url', email: 'email', number: 'number' }[f.type] || 'text';
@@ -176,6 +191,9 @@
         <div id="msg" class="small" role="status" aria-live="polite"></div>
         <button class="btn primary" id="sub" style="justify-self:start">Submit application</button></form>`;
     const f = $('#af'), msg = $('#msg'), sub = $('#sub');
+    // Currency follows the phone country until the applicant picks one themselves
+    $$('[data-cur]', f).forEach(c => c.onchange = () => { c.dataset.picked = '1'; });
+    $('#pcc').addEventListener('change', () => { const cur = COUNTRY_CUR[$('#pcc').value]; if (cur) $$('[data-cur]', f).forEach(c => { if (!c.dataset.picked) c.value = cur; }); });
     $('#cv').onchange = e => { $('#cvname').textContent = e.target.files[0]?.name || 'Choose your resume'; };
     $$('[data-file]', f).forEach(i => i.onchange = () => { $(`[data-fname="${i.dataset.file}"]`, f).textContent = i.files[0]?.name || 'Choose a file'; });
     const err = (t, focus) => { msg.textContent = t; msg.className = 'small err-msg'; focus?.focus(); };
@@ -209,6 +227,11 @@
           if (!v) { if (q.required) return err(`Please answer: ${q.label}`, inp); continue; }
           if (q.type === 'url' && !/^https?:\/\/\S+\.\S+/i.test(v)) return err(`${q.label}: please paste a full link starting with https://`, inp);
           if (q.type === 'email' && !/^\S+@\S+\.\S+$/.test(v)) return err(`${q.label}: please add a valid email.`, inp);
+          if (q.type === 'money') {
+            const n = v.replace(/[\s,]/g, '');
+            if (!/^\d+(\.\d+)?$/.test(n) || !(+n > 0)) return err(`${q.label}: please enter the amount as a number, for example 1200000.`, inp);
+            answers[q.id] = `${+n} ${$(`[data-cur="${q.id}"]`, f).value}`; continue;
+          }
           answers[q.id] = v;
         }
       }

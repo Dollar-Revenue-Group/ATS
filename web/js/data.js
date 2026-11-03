@@ -4,14 +4,15 @@
    - DemoApi: in-memory sample data, used when config.js has no Supabase URL or the URL has ?demo */
 (function () {
   const STAGES = [
-    { id: 1, name: 'Applied', position: 1 }, { id: 2, name: 'Screened', position: 2 },
-    { id: 3, name: 'Round 1', position: 3 }, { id: 4, name: 'Round 2', position: 4 }, { id: 8, name: 'Round 3', position: 5 },
-    { id: 5, name: 'Offer', position: 6 }, { id: 6, name: 'Hired', position: 7, is_terminal: true },
-    { id: 7, name: 'Rejected', position: 8, is_terminal: true }
+    { id: 1, name: 'Applied', position: 1 }, { id: 2, name: 'Screened', position: 2 }, { id: 9, name: 'Manual Screened', position: 3 },
+    { id: 3, name: 'Round 1', position: 4 }, { id: 4, name: 'Round 2', position: 5 }, { id: 8, name: 'Round 3', position: 6 },
+    { id: 10, name: 'Round 4', position: 7 }, { id: 11, name: 'Round 5', position: 8 },
+    { id: 5, name: 'Offer', position: 9 }, { id: 6, name: 'Hired', position: 10, is_terminal: true },
+    { id: 7, name: 'Rejected', position: 11, is_terminal: true }
   ];
   // Interview rounds map to pipeline stages
-  const ROUND_STAGE = { 1: 3, 2: 4, 3: 8 };
-  const STAGE_ROUND = { 3: 1, 4: 2, 8: 3 };
+  const ROUND_STAGE = { 1: 3, 2: 4, 3: 8, 4: 10, 5: 11 };
+  const STAGE_ROUND = { 3: 1, 4: 2, 8: 3, 10: 4, 11: 5 };
 
   /* ───────────── Live back end ───────────── */
   function LiveApi(cfg) {
@@ -341,6 +342,7 @@
         meeting_link: 'https://meet.google.com/abc-defg-hij', status, rating: status === 'completed' ? 4 : null, recommendation: status === 'completed' ? 'yes' : null,
         feedback: status === 'completed' ? 'Confident on the phone, handled objections well. Good fit for the team.' : null, created_at: iso(now - 4 * day) }));
     const templates = [
+      { key: 'manual_screened', subject: 'Your application for {{job_title}}', body: 'Hi {{candidate_name}},\n\nThanks for applying. We have reviewed your profile and will be in touch about next steps shortly.\n\n{{sender_name}}', enabled: true },
       { key: 'round_1', subject: 'Book your {{round_name}} for {{job_title}}', body: 'Hi {{candidate_name}},\n\nGood news: we would like to meet you. Please pick a time that suits you:\n{{booking_link}}\n\n{{sender_name}}', enabled: true },
       { key: 'received', subject: 'We received your application for {{job_title}}', body: 'Hi {{candidate_name}},\n\nThank you for applying for the {{job_title}} role at DRG. Our team is reviewing your application and will be in touch soon.\n\nBest regards,\nDRG Talent Team' },
       { key: 'interview_invite', subject: 'Interview for {{job_title}} on {{interview_time}}', body: 'Hi {{candidate_name}},\n\nWe would like to invite you to an interview for the {{job_title}} role on {{interview_time}} (IST).\n\nJoin here: {{meeting_link}}\n\nBest regards,\nDRG Talent Team' },
