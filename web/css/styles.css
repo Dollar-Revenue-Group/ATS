@@ -800,3 +800,6 @@ body.cp-mode .look-btn{right:auto;left:18px;bottom:18px}body.cp-mode .look-panel
 :root[data-font="brand"] .prose{font-size:15px}
 :root[data-font="brand"] .brand-name{font-weight:800}
 .col-b>.kcard{flex-shrink:0}
+.cp-res-wrap{height:100%;min-height:0;display:flex;flex-direction:column}
+.cp-res-wrap>.cp-text,.cp-res-wrap>.empty,.cp-res-wrap>.viewer-img{overflow:auto;flex:1}
+.cp-res-wrap>.cp-frame{flex:1}

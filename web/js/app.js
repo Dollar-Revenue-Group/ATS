@@ -8,7 +8,7 @@
   // Saved per person in this browser
   const FONTS = [
     { k: 'brand', name: 'Montserrat', tag: 'DRG brand font · default', head: "'Montserrat'", body: "'Montserrat'", g: null },
-    { k: 'modern', name: 'Inter + Plus Jakarta Sans', tag: 'Clean and sharp', head: "'Plus Jakarta Sans'", body: "'Inter'", g: 'Plus+Jakarta+Sans:wght@500;600;700;800' },
+    { k: 'modern', name: 'Inter + Plus Jakarta Sans', tag: 'Clean and sharp', head: "'Plus Jakarta Sans'", body: "'Inter'", g: 'Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700' },
     { k: 'lexend', name: 'Lexend', tag: 'Designed for easy reading', head: "'Lexend'", body: "'Lexend'", g: 'Lexend:wght@400;500;600;700' },
     { k: 'atkinson', name: 'Atkinson Hyperlegible', tag: 'Very clear letters, great for long reading', head: "'Atkinson Hyperlegible'", body: "'Atkinson Hyperlegible'", g: 'Atkinson+Hyperlegible:wght@400;700' },
     { k: 'dmsans', name: 'DM Sans', tag: 'Soft and friendly', head: "'DM Sans'", body: "'DM Sans'", g: 'DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700' },
@@ -182,7 +182,9 @@
     } catch (e) { if (run !== state.run) return; el.innerHTML = `<div class="card empty">Could not load this page. ${esc(e.message)}</div>`; console.error(e); }
     refreshBadge();
   }
-  async function refreshBadge() {
+  let badgeAt = 0;
+  async function refreshBadge(force) {
+    if (!force && Date.now() - badgeAt < 45000) return; badgeAt = Date.now();
     try { const cards = await api.cards(); const n = cards.filter(c => c.stage_id === 2 && c.verdict && c.verdict !== 'low_fit').length;
       const b = $('#nav-review'); if (b) { b.hidden = !n; b.textContent = n; } } catch (e) { }
   }
@@ -861,6 +863,8 @@
     setTimeout(() => document.addEventListener('mousedown', off), 0);
   }
   /* ───────── candidate: shared pieces (side drawer + full page) ───────── */
+  // Is a live database change about this application? (unknown shapes count as yes, to be safe)
+  const aboutApp = (p, id) => { const r = p && (p.new && Object.keys(p.new).length ? p.new : p.old); if (!r) return true; const k = r.application_id || r.id; return !k || k === id; };
   const profileUrl = (id, q) => `${location.pathname}${location.search}#/profile/${id}${q ? '?' + q : ''}`;
   const openProfileTab = (id, q) => window.open(profileUrl(id, q), '_blank', 'noopener');
   function failedMailsOf(a) {
@@ -971,7 +975,7 @@
       bindCandidate(s, a, render, { score: o => openProfileTab(id, o.interview ? `iv=${o.interview.id}` : o.existingId ? `edit=${o.existingId}` : 'score=1') });
     };
     try { await render(); } catch (e) { fail(e); close(); }
-    let rt; const unsub = api.subscribe(() => { clearTimeout(rt); rt = setTimeout(() => { if (document.body.contains(s)) render().catch(() => {}); }, 300); });
+    let rt; const unsub = api.subscribe(p => { if (!aboutApp(p, id)) return; clearTimeout(rt); rt = setTimeout(() => { if (document.body.contains(s)) render().catch(() => {}); }, 300); });
     const obs = new MutationObserver(() => { if (!document.body.contains(s)) { unsub(); obs.disconnect(); } });
     obs.observe(document.body, { childList: true });
   }
@@ -1037,7 +1041,7 @@
     sc.addEventListener('scroll', () => { const cs = $$('.pv-page', pages); if (cs.length < 2) return; const mid = sc.scrollTop + sc.clientHeight / 3;
       let n = 1; cs.forEach((c, i) => { if (c.offsetTop <= mid) n = i + 1; }); $('#pvpg', host).textContent = `Page ${n} of ${cs.length}`; }, { passive: true });
     // Re-fit when the panel is resized
-    if (window.ResizeObserver) { let rt, w0 = sc.clientWidth; const ro = new ResizeObserver(() => { if (!document.body.contains(sc)) return ro.disconnect(); if (zoom !== 'fit' || Math.abs(sc.clientWidth - w0) < 8) return; w0 = sc.clientWidth; clearTimeout(rt); rt = setTimeout(draw, 150); }); ro.observe(sc); }
+    if (window.ResizeObserver) { let rt, w0 = sc.clientWidth; const ro = new ResizeObserver(() => { if (!sc.isConnected) return; if (zoom !== 'fit' || Math.abs(sc.clientWidth - w0) < 8) return; w0 = sc.clientWidth; clearTimeout(rt); rt = setTimeout(draw, 150); }); ro.observe(sc); }
     await draw();
   }
   // Shows a file inside `host` (PDF in a frame, images, or the text read from a Word file)
@@ -1161,13 +1165,15 @@
     const setPref = (k, v) => { try { localStorage.setItem('ats.' + k, v); } catch (e) { /* private mode */ } };
     let showResume = pref('cp.resume') !== '0', showScore = pref('cp.score') !== '0';
     let scoreOpts = params.get('iv') ? { interviewId: params.get('iv') } : params.get('edit') ? { existingId: params.get('edit') } : {};
-    let blobUrl = null, resumeLoaded = false, team = null;
+    let blobUrl = null, resumeLoaded = false, team = null, resumeKey = null, resWrap = null, resLinks = null;
     const canAct = ['admin', 'recruiter', 'hiring_manager'].includes(state.me.role);
     const render = async () => {
-      const [a, iscores] = await Promise.all([api.application(id), api.interviewScores(id).catch(() => [])]);
-      if (team === null) { try { team = (await api.team()).filter(t => t.active !== false); } catch (e) { team = []; } }
+      const [a, iscores, tm] = await Promise.all([api.application(id), api.interviewScores(id).catch(() => []), team === null ? api.team().catch(() => []) : null]);
+      if (tm) team = tm.filter(t => t.active !== false);
       const c = a.candidates || {}; const sc = a.screening; const name = c.full_name || a.resumes?.file_name || 'New applicant';
       document.title = `${name} · DRG ATS`;
+      // Keep the open resume (already downloaded and drawn) instead of loading it again
+      const sv0 = resWrap && $('.pv-scroll', resWrap); const heldScroll = sv0 ? [sv0.scrollLeft, sv0.scrollTop] : null;
       const cfg = scoringCfg(a.jobs); const xs = iscores.filter(x => x.score != null);
       const avg = xs.length ? xs.reduce((t, x) => t + +x.score, 0) / xs.length : null;
       const keepScroll = $('.cp-main', el)?.scrollTop || 0;
@@ -1201,16 +1207,25 @@
       $('#tgres', el).onclick = () => setRes(!showResume); $('#xres', el).onclick = () => setRes(false);
       $('#tgsc', el).onclick = () => setSc(!showScore); $('#xsc', el).onclick = () => setSc(false);
       if (showResume) {
-        if (!a.resumes?.storage_path) $('#resbody', el).innerHTML = '<div class="empty">No resume file for this candidate.</div>';
-        else { if (blobUrl) URL.revokeObjectURL(blobUrl); blobUrl = await fileInto($('#resbody', el), { path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }, $('#reslinks', el)); resumeLoaded = true; }
-      }
+        if (!a.resumes?.storage_path) { $('#resbody', el).innerHTML = '<div class="empty">No resume file for this candidate.</div>'; resumeKey = null; }
+        else {
+          if (resumeKey !== a.resumes.storage_path || !resWrap) {
+            if (blobUrl) URL.revokeObjectURL(blobUrl); blobUrl = null; resumeKey = a.resumes.storage_path;
+            resWrap = document.createElement('div'); resWrap.className = 'cp-res-wrap'; resLinks = document.createElement('span'); resLinks.className = 'row'; resLinks.style.gap = '6px';
+            // Not awaited: questions and scoring show straight away while the resume loads
+            fileInto(resWrap, { path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }, resLinks).then(u => { blobUrl = u; resumeLoaded = true; });
+          }
+          $('#resbody', el).replaceChildren(resWrap); $('#reslinks', el).replaceChildren(resLinks);
+          const sv = heldScroll && $('.pv-scroll', resWrap); if (sv) { sv.scrollLeft = heldScroll[0]; sv.scrollTop = heldScroll[1]; }
+        }
+      } else { resumeKey = null; resWrap = null; }
       questionsCard($('#iqcard', el), a);
       if (showScore) scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); });
       if (canAct) bindCandidate(el, a, render, { score: o => { scoreOpts = o.interview ? { interviewId: o.interview.id } : o.existingId ? { existingId: o.existingId } : {}; if (!showScore) setSc(true); else scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); }); $('.cp-scoring', el)?.scrollIntoView({ block: 'nearest' }); } });
     };
     await render();
     // Live updates, but never while someone is typing a scorecard
-    let rt; const unsub = api.subscribe(() => { clearTimeout(rt); rt = setTimeout(() => { const busy = $('#scbody', el)?.dataset.dirty === '1'; if (state.route === 'profile' && !busy) render().catch(() => {}); }, 400); });
+    let rt; const unsub = api.subscribe(p => { if (!aboutApp(p, id)) return; clearTimeout(rt); rt = setTimeout(() => { const busy = $('#scbody', el)?.dataset.dirty === '1'; if (state.route === 'profile' && !busy) render().catch(() => {}); }, 400); });
     const stop = () => { if (state.route !== 'profile') { unsub(); document.body.classList.remove('cp-mode'); if (blobUrl) URL.revokeObjectURL(blobUrl); window.removeEventListener('hashchange', stop); } };
     window.addEventListener('hashchange', stop);
   }
@@ -2147,7 +2162,7 @@
       shell(); await route();
       state.unsub?.();
       state.unsub = api.subscribe(() => { clearTimeout(timer); timer = setTimeout(() => {
-        if (state.route === 'pipeline') state.redraw?.(); else if (['dashboard', 'candidates'].includes(state.route)) route(); refreshBadge(); }, 400); });
+        if (state.route === 'pipeline') state.redraw?.(); else if (['dashboard', 'candidates'].includes(state.route)) route(); refreshBadge(true); }, 400); });
     } catch (e) { fail(e); login(); }
   }
   window.addEventListener('hashchange', () => { state.redraw = null; route(); });
