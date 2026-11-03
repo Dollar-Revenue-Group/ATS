@@ -730,3 +730,4 @@ body.cp-dragging iframe{pointer-events:none}
 .cp-resume .cp-pane-b>.cp-text,.cp-resume .cp-pane-b>.empty,.cp-resume .cp-pane-b>.viewer-img{overflow:auto}
 body.cp-mode .look-btn{right:auto;left:18px;bottom:18px}body.cp-mode .look-panel{right:auto;left:18px;bottom:64px}
 .sp-rec button{padding:7px 4px;white-space:nowrap;font-size:12px}
+.jt-sender{padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}.jt-sender select{max-width:560px}

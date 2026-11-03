@@ -272,6 +272,8 @@
         <div class="row" style="gap:8px"><input class="input" id="jscn" placeholder="Add your own point, e.g. Objection handling" style="max-width:340px"><button type="button" class="btn sm" id="jsca">Add</button></div></div></section>
       <section class="wz-step" data-step="2" hidden><div class="wz-h"><h3>Panel & rounds</h3><p class="small muted">Pick the hiring panel and one interviewer per round. Candidates book with that round's interviewer.</p></div><div id="jpr" style="display:grid;gap:14px"></div></section>
       <section class="wz-step" data-step="4" hidden><div class="wz-h"><h3>Candidate emails</h3><p class="small muted">Keep the defaults or write this job's own version of any email.</p></div>
+      ${senders.length ? `<div class="field jt-sender"><label for="jsn2">Send emails from</label><select class="input" id="jsn2">${senders.map(x => `<option value="${x.id}" ${x.id === (job?.sender_id || defSender?.id) ? 'selected' : ''}>${esc(senderLabel(x))}</option>`).join('')}</select>
+        <div class="small muted" id="jsnh2"></div></div>` : ''}
       <div class="field" id="jtpl"><div class="small muted"><span class="spin"></span> Loading email templates…</div></div></section>`,
       `<button class="btn" id="wzback" style="margin-right:auto">← Back</button><button class="btn" data-close>Cancel</button>${job ? '<button class="btn" id="save">Save changes</button>' : ''}<button class="btn primary" id="wznext">Next →</button>${job ? '' : '<button class="btn primary" id="save" hidden>Create job</button>'}`);
     m.el.querySelector('.modal').classList.add('wide', 'wz');
@@ -292,12 +294,16 @@
     const snNote = () => { if (!sn) return; const x = senders.find(y => y.id === sn.value) || defSender || {};
       snh.innerHTML = x.from_email ? `Candidates see <b>${esc(x.from_name)}</b> &lt;${esc(x.from_email)}&gt;. Every email for this job (applied, rounds, confirmations, reminders) comes from here. You can also change it, and each email's wording, on the job's Emails tab.`
         : `Candidates see <b>${esc(x.from_name || 'DRG Talent Team')}</b> from the DRG hiring mailbox.`; };
-    if (sn) { sn.onchange = snNote; snNote(); }
+    // The sender can be picked on Basics or on Candidate emails; both stay in step
+    const sn2 = $('#jsn2', m.el), snh2 = $('#jsnh2', m.el);
+    const syncSender = from => { if (!sn || !sn2) return; if (from === sn2) sn.value = sn2.value; else sn2.value = sn.value; snNote(); if (snh2) snh2.innerHTML = snh.innerHTML; };
+    if (sn) { sn.onchange = () => syncSender(sn); syncSender(sn); }
+    if (sn2) sn2.onchange = () => syncSender(sn2);
     const jc = $('#jc', m.el);
     // Typing a client name picks that client's sender if there is exactly one match (e.g. TechJays → zaina@techjays.com)
     if (jc && sn && !job?.sender_id) jc.onchange = () => { const c = jc.value.trim().toLowerCase(); if (!c) return;
       const hits = senders.filter(x => x.from_email && (x.from_email.split('@')[1] || '').toLowerCase().startsWith(c.replace(/\s+/g, '')));
-      if (hits.length === 1) { sn.value = hits[0].id; snNote(); } };
+      if (hits.length === 1) { sn.value = hits[0].id; syncSender(sn); } };
     const scfg = scoringCfg(job); const crit = scfg.criteria.map(c => ({ ...c })); const crit0 = JSON.stringify(crit);
     const drawCrit = () => { const on = crit.map(c => c.name.toLowerCase());
       $('#jsc', m.el).innerHTML = crit.map((c, i) => `<button type="button" class="pick-chip on" data-cx="${i}" title="Remove">${esc(c.name)} ${icon('x', 12)}</button>`).join('')
