@@ -87,7 +87,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn:hover{border-color:var(--muted)}
 .btn svg{width:16px;height:16px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+.btn.primary:hover{background:var(--accent-hover,var(--accent-strong));border-color:var(--accent-hover,var(--accent-strong))}
 .btn.danger{color:var(--disq);border-color:color-mix(in srgb,var(--disq) 40%,transparent)}
 .btn.danger.solid{background:var(--disq);color:#fff;border-color:var(--disq)}
 .btn.ghost{border-color:transparent;background:transparent}
@@ -749,3 +749,54 @@ body.cp-mode .look-btn{right:auto;left:18px;bottom:18px}body.cp-mode .look-panel
 .ap-n{font-size:13px;padding-top:6px;border-top:1px solid var(--line)}.ap-n .look-cur{margin-left:8px}
 .ap-cols{display:flex;flex-wrap:wrap;gap:8px}
 .ap-col{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;font:inherit;font-weight:600;font-size:13px}
+
+/* ═════════ DRG brand kit 2026 (default) ═════════
+   Casual Black #191919 · Malachite #1BDF4D · White · Lime #D9E021 (key actions only) · Growth gradient Malachite → Lime
+   Neutrals: Graphite #2A2A2A · Ash #8A8A8A · Mist #F4F4F2 · Type: Montserrat
+   Pairings: black text on Malachite or Lime; never white on Malachite, never Lime text on white */
+:root[data-colour="brand"]{
+  --bg:#F4F4F2; --surface:#FFFFFF; --surface-2:#F9F9F7; --ink:#191919; --ink-2:#2A2A2A; --muted:#666663;
+  --line:#E6E6E2; --line-2:#D3D3CE;
+  --accent:#1BDF4D; --accent-ink:#191919; --accent-soft:#E2FBE8; --accent-strong:#0C8A2D; --accent-hover:#17C744;
+  --lime:#D9E021; --grad:linear-gradient(90deg,#1BDF4D,#D9E021);
+  --side:#191919; --side-ink:#E9E9E6; --side-muted:#8A8A8A; --side-active:#2A2A2A;
+  --pass:#0E9F38; --pass-soft:#E2FBE8;
+  --shadow:0 1px 2px rgba(25,25,25,.06),0 4px 16px rgba(25,25,25,.06); --shadow-lg:0 12px 40px rgba(25,25,25,.2);
+}
+@media (prefers-color-scheme: dark){
+  :root[data-colour="brand"]:not([data-theme="light"]){
+    --bg:#121212; --surface:#191919; --surface-2:#202020; --ink:#F4F4F2; --ink-2:#D9D9D5; --muted:#9A9A96;
+    --line:#2A2A2A; --line-2:#363636;
+    --accent:#1BDF4D; --accent-ink:#191919; --accent-soft:#16301D; --accent-strong:#5BEA7E; --accent-hover:#47E570;
+    --side:#0F0F0F; --side-ink:#E9E9E6; --side-muted:#8A8A8A; --side-active:#232323;
+    --pass:#3FE36A; --pass-soft:#14301C;
+  }
+}
+:root[data-theme="dark"][data-colour="brand"]{
+  --bg:#121212; --surface:#191919; --surface-2:#202020; --ink:#F4F4F2; --ink-2:#D9D9D5; --muted:#9A9A96;
+  --line:#2A2A2A; --line-2:#363636;
+  --accent:#1BDF4D; --accent-ink:#191919; --accent-soft:#16301D; --accent-strong:#5BEA7E; --accent-hover:#47E570;
+  --side:#0F0F0F; --side-ink:#E9E9E6; --side-muted:#8A8A8A; --side-active:#232323;
+  --pass:#3FE36A; --pass-soft:#14301C;
+}
+/* Brand details */
+:root[data-colour="brand"] .nav a.active{box-shadow:inset 3px 0 0 #1BDF4D}
+:root[data-colour="brand"] .nav a.active svg{color:#1BDF4D;opacity:1}
+:root[data-colour="brand"] .tabs button.on{border-image:var(--grad) 1;border-bottom-width:2px}
+:root[data-colour="brand"] .page a:not(.btn):not(.tag):not(.chip):not(.kc-open),:root[data-colour="brand"] .drawer a:not(.btn):not(.tag):not(.chip){color:var(--accent-strong)}
+:root[data-colour="brand"] .topbar a.btn.primary{background:#D9E021;border-color:#D9E021;color:#191919}
+:root[data-colour="brand"] .topbar a.btn.primary:hover{background:#C8CF14;border-color:#C8CF14}
+:root[data-colour="brand"] .cp-head{background:linear-gradient(var(--surface),var(--surface)) padding-box,radial-gradient(120% 140% at 0% 0%,var(--accent-soft) 0%,transparent 55%);position:relative;overflow:hidden}
+:root[data-colour="brand"] .cp-head::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--grad)}
+:root[data-colour="brand"] .iq-ic{background:var(--grad);color:#191919}
+:root[data-colour="brand"] .sp-rate button.on{color:#191919}
+/* Signature 45° corner cut from the G, on score tiles */
+:root[data-colour="brand"] .cp-score-box,:root[data-colour="brand"] .iv-tile{clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+/* Montserrat: ExtraBold/Bold headlines, SemiBold caps labels with +20% tracking, Regular body */
+:root[data-font="brand"] h1{font-weight:800;letter-spacing:-.02em}
+:root[data-font="brand"] h2,:root[data-font="brand"] h3{font-weight:700;letter-spacing:-.01em}
+:root[data-font="brand"] .eyebrow{letter-spacing:.2em;font-weight:600}
+:root[data-font="brand"] body{font-size:14px}
+:root[data-font="brand"] .prose{font-size:15px}
+:root[data-font="brand"] .brand-name{font-weight:800}
+.col-b>.kcard{flex-shrink:0}

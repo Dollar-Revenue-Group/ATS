@@ -7,7 +7,8 @@
   /* ───────── appearance: fonts, colours, text size (Settings → Appearance) ───────── */
   // Saved per person in this browser
   const FONTS = [
-    { k: 'modern', name: 'Inter + Plus Jakarta Sans', tag: 'Default · clean and sharp', head: "'Plus Jakarta Sans'", body: "'Inter'", g: null },
+    { k: 'brand', name: 'Montserrat', tag: 'DRG brand font · default', head: "'Montserrat'", body: "'Montserrat'", g: null },
+    { k: 'modern', name: 'Inter + Plus Jakarta Sans', tag: 'Clean and sharp', head: "'Plus Jakarta Sans'", body: "'Inter'", g: 'Plus+Jakarta+Sans:wght@500;600;700;800' },
     { k: 'lexend', name: 'Lexend', tag: 'Designed for easy reading', head: "'Lexend'", body: "'Lexend'", g: 'Lexend:wght@400;500;600;700' },
     { k: 'atkinson', name: 'Atkinson Hyperlegible', tag: 'Very clear letters, great for long reading', head: "'Atkinson Hyperlegible'", body: "'Atkinson Hyperlegible'", g: 'Atkinson+Hyperlegible:wght@400;700' },
     { k: 'dmsans', name: 'DM Sans', tag: 'Soft and friendly', head: "'DM Sans'", body: "'DM Sans'", g: 'DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700' },
@@ -21,7 +22,7 @@
     { k: 'merri', name: 'Merriweather + Open Sans', tag: 'Traditional serif headings', head: "'Merriweather'", body: "'Open Sans'", g: 'Merriweather:wght@700&family=Open+Sans:wght@400;500;600;700' }
   ];
   const COLOURS = [
-    { k: 'green', name: 'DRG green', sw: ['#178A35', '#E2F4E3'] }, { k: 'blue', name: 'Calm blue', sw: ['#2F5BD3', '#E6EDFC'] },
+    { k: 'brand', name: 'DRG brand · black, Malachite, Lime', sw: ['#191919', '#1BDF4D', '#D9E021'] }, { k: 'green', name: 'Classic green', sw: ['#178A35', '#E2F4E3'] }, { k: 'blue', name: 'Calm blue', sw: ['#2F5BD3', '#E6EDFC'] },
     { k: 'teal', name: 'Deep teal · warm paper', sw: ['#0F766E', '#F6F2EC'] }, { k: 'violet', name: 'Violet', sw: ['#6D4AE0', '#EEE9FD'] }, { k: 'slate', name: 'Slate', sw: ['#334155', '#EEF1F5'] }
   ];
   const SIZES = [['normal', 'Normal'], ['large', 'Larger'], ['xl', 'Largest']];
@@ -37,8 +38,7 @@
     const old = lookPref('look'); if (old && !lookPref('font')) { lookSet('font', old === 'calm' ? 'lexend' : old === 'editorial' ? 'editorial' : 'modern'); lookSet('colour', old === 'calm' ? 'blue' : old === 'editorial' ? 'teal' : 'green'); }
     const f = FONTS.find(x => x.k === lookPref('font')) || FONTS[0]; loadFont(f);
     const r = document.documentElement;
-    if (f.k === 'modern') { r.style.removeProperty('--display'); r.style.removeProperty('--body'); }
-    else { r.style.setProperty('--display', `${f.head},"Inter",system-ui,sans-serif`); r.style.setProperty('--body', `${f.body},"Inter",system-ui,sans-serif`); }
+    r.style.setProperty('--display', `${f.head},"Inter",Arial,system-ui,sans-serif`); r.style.setProperty('--body', `${f.body},"Inter",Arial,system-ui,sans-serif`);
     r.dataset.font = f.k;
     r.dataset.colour = (COLOURS.find(x => x.k === lookPref('colour')) || COLOURS[0]).k;
     const sz = lookPref('size'); r.dataset.size = SIZES.some(s => s[0] === sz) ? sz : 'normal';
