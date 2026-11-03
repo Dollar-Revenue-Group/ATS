@@ -628,7 +628,7 @@
   }
 
   /* Custom application form for one job */
-  const FIELD_TYPES = [['text', 'Short answer'], ['textarea', 'Long answer'], ['url', 'Link (e.g. Loom, portfolio)'], ['email', 'Email'], ['number', 'Number'], ['select', 'Pick one'], ['file', 'File upload']];
+  const FIELD_TYPES = [['text', 'Short answer'], ['textarea', 'Long answer'], ['url', 'Link (e.g. Loom, portfolio)'], ['email', 'Email'], ['number', 'Number'], ['money', 'Amount with currency (shown in USD too)'], ['select', 'Pick one'], ['file', 'File upload']];
   function formBuilder(body, job, canEdit) {
     let fields = JSON.parse(JSON.stringify(job.form_fields || []));
     const dis = canEdit ? '' : 'disabled';
@@ -884,6 +884,42 @@
       ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
       ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}`;
   }
+  /* Salary answers: read "1200000 PKR" (or older free text like "165k PKR") and show it in USD at today's rate */
+  const CUR_SYM = { '$': 'USD', '₹': 'INR', '€': 'EUR', '£': 'GBP', 'rs': 'INR', 'rs.': 'INR' };
+  const MULT = { k: 1e3, thousand: 1e3, l: 1e5, lac: 1e5, lakh: 1e5, lakhs: 1e5, lacs: 1e5, m: 1e6, mn: 1e6, million: 1e6, cr: 1e7, crore: 1e7, crores: 1e7 };
+  function moneyOf(q) {
+    const v = String(q?.value || '').trim(); if (!v || v.length > 60) return null;
+    if (q.type !== 'money' && !/ctc|salary|compensation|pay|package|income/i.test(q.label || '')) return null;
+    const m = v.match(/^([A-Za-z]{3}|[$₹€£]|rs\.?)?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|l|lacs?|lakhs?|m|mn|million|thousand|cr|crores?)?\.?\s*([A-Za-z]{3}|[$₹€£])?(?:\s*(?:\/|per|a)\s*(\w+))?\s*$/i);
+    if (!m) return null;
+    const code = x => !x ? null : CUR_SYM[x.toLowerCase()] || (/^[A-Za-z]{3}$/.test(x) ? x.toUpperCase() : null);
+    const cur = code(m[4]) || code(m[1]); if (!cur || !/^[A-Z]{3}$/.test(cur)) return null;
+    const amount = parseFloat(m[2].replace(/,/g, '')) * (MULT[(m[3] || '').toLowerCase()] || 1);
+    return amount > 0 ? { amount, cur, per: m[5] ? ' / ' + m[5].toLowerCase() : '' } : null;
+  }
+  const fmtMoney = (n, cur) => `${Math.round(n).toLocaleString('en-US')} ${cur}`;
+  // Exchange rates (US dollar base) from open.er-api.com, refreshed once a day and kept in this browser
+  let fxP = null;
+  function fxRates() {
+    if (fxP) return fxP;
+    const today = new Date().toISOString().slice(0, 10);
+    try { const c = JSON.parse(localStorage.getItem('ats.fx') || 'null'); if (c && c.day === today && c.rates) return (fxP = Promise.resolve(c)); } catch (e) { /* no cache */ }
+    fxP = fetch('https://open.er-api.com/v6/latest/USD').then(r => r.json()).then(j => {
+      if (j.result !== 'success' || !j.rates) throw new Error('no rates');
+      const c = { day: today, at: j.time_last_update_unix * 1000, rates: j.rates };
+      try { localStorage.setItem('ats.fx', JSON.stringify(c)); } catch (e) { /* storage off */ }
+      return c; }).catch(e => { fxP = null; throw e; });
+    return fxP;
+  }
+  function fillFx(root) {
+    const els = $$('[data-fx-amt]', root); if (!els.length) return;
+    fxRates().then(fx => els.forEach(el => { const r = fx.rates[el.dataset.fxCur];
+      if (!r) { el.textContent = ''; return; }
+      const usd = +el.dataset.fxAmt / r;
+      el.innerHTML = `<b class="fx-usd">≈ ${usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</b> <span class="small muted">at 1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur}</span>`;
+      el.title = `1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur} · rate of ${new Date(fx.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }))
+      .catch(() => els.forEach(el => { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); }));
+  }
   function candidateBody(a, iscores, canAct, mode) {
     const c = a.candidates || {}; const sc = a.screening; const failed = failedMailsOf(a);
     return `${mode === 'page' ? '' : scoringCard(a, iscores)}
@@ -901,7 +937,9 @@
             <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
         : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
       ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
-        ${(a.form_answers || []).map(q => `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>` : esc(q.value)}</div></div>`).join('')}
+        ${(a.form_answers || []).map(q => { const m = moneyOf(q);
+          return `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>`
+            : m ? `${esc(fmtMoney(m.amount, m.cur) + m.per)}${m.cur !== 'USD' ? ` <span class="fx" data-fx-amt="${m.amount}" data-fx-cur="${m.cur}"></span>` : ''}` : esc(q.value)}</div></div>`; }).join('')}
         ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
       ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
         ${c.profile_summary ? `<p class="prose">${esc(c.profile_summary)}</p>` : ''}
@@ -919,6 +957,7 @@
   // Wires the stage select and action buttons; `hooks` decides how scoring opens (new tab from the drawer, the right panel on the full page)
   function bindCandidate(root, a, render, hooks) {
     const id = a.id, c = a.candidates || {};
+    fillFx(root);
     const again = () => { render(); state.redraw?.(); };
     const mv = $('#mv', root);
     if (mv) mv.onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, again); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); again(); } catch (er) { fail(er); } };
