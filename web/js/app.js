@@ -212,6 +212,8 @@
       <div class="grid2"><div class="field"><label for="je">Employment type</label><select class="input" id="je">${['Full-time', 'Part-time', 'Contract', 'Internship'].map(t => `<option ${job?.employment_type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <div class="field"><label for="jo">Openings</label><input class="input" id="jo" type="number" min="1" value="${job?.openings || 1}"></div></div>
       <div class="field"><label for="jx">Job description</label><textarea class="input" id="jx" rows="7" placeholder="Paste the JD. Candidates see it on the careers site and the AI reads it when screening.">${esc(job?.jd_text)}</textarea></div>
+      <div class="modal-sec"><h3>Candidate emails</h3></div>
+      <div class="field" id="jtpl"><div class="small muted"><span class="spin"></span> Loading email templates…</div></div>
       <div class="modal-sec"><h3>Interview scoring</h3></div>
       <div class="field"><div class="small muted">The points interviewers rate from 1 to 5 on a candidate's profile. Click to add or remove. Weights and the scoring formula are on the job's <b>Interview scoring</b> tab.</div>
         <div class="row" id="jsc" style="gap:6px;margin-top:4px"></div>
@@ -241,6 +243,9 @@
     drawCrit();
     const jscn = $('#jscn', m.el); $('#jsca', m.el).onclick = () => { addCrit(jscn.value); jscn.value = ''; };
     jscn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addCrit(jscn.value); jscn.value = ''; } };
+    const senderName = () => { const x = senders.find(y => y.id === $('#jsn', m.el)?.value) || defSender; return x?.from_name || 'DRG Talent Team'; };
+    let tpl = { value: () => ({ changes: [] }) };
+    jobTemplatesEditor($('#jtpl', m.el), job, senderName, () => $('#jt', m.el).value.trim()).then(x => { tpl = x; });
     const ed = panelRoundsEditor($('#jpr', m.el), { panel: job?.hiring_panel || [], rounds: job?.rounds || [], coord: job?.coordinator_ids || [] }, team, true);
     $('#save', m.el).onclick = async () => {
       const d = { title: $('#jt', m.el).value.trim(), department: $('#jd2', m.el).value.trim(), location: $('#jl', m.el).value.trim(),
@@ -249,12 +254,15 @@
       if (!d.title) return toast('Add a job title first.', true);
       const v = ed.value(); if (v.error) return toast(v.error, true);
       Object.assign(d, { hiring_panel: v.hiring_panel, rounds: v.rounds, coordinator_ids: v.coordinator_ids });
+      const tv = tpl.value(); if (tv.error) { tpl.show?.(tv.key); return toast(tv.error, true); }
       const critChanged = JSON.stringify(crit) !== crit0;
       if (critChanged) d.interview_scoring = { ...(job?.interview_scoring || {}), criteria: crit, mode: scfg.mode, formula: scfg.formula, hire: scfg.hire, maybe: scfg.maybe };
       const btn = $('#save', m.el); btn.disabled = true;
       try { let saved;
-            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; m.close(); toast('Job updated'); route(); if (critChanged) rescoreJob(saved, scoringCfg(saved)); }
-            else { saved = await api.createJob(d); m.close(); toast('Job created. Now write the AI screening brief.'); location.hash = `#/jobs/${saved.id}?tab=brief`; }
+            const tplNote = async id => { if (!tv.changes.length) return ''; const bad = await saveJobTemplates(id, tv.changes);
+              return bad.length ? ` but ${bad.length} email${bad.length > 1 ? 's were' : ' was'} not saved; check the job's Emails tab` : ` with ${tv.changes.length} email change${tv.changes.length > 1 ? 's' : ''}`; };
+            if (job) { await api.updateJob(job.id, d); saved = { ...job, ...d }; const n = await tplNote(job.id); m.close(); toast(`Job updated${n}`, n.startsWith(' but')); route(); if (critChanged) rescoreJob(saved, scoringCfg(saved)); }
+            else { saved = await api.createJob(d); const n = await tplNote(saved.id); m.close(); toast(`Job created${n}. Now write the AI screening brief.`, n.startsWith(' but')); location.hash = `#/jobs/${saved.id}?tab=brief`; }
             ensureCalLinks({ ...saved, rounds: d.rounds, cal_links: saved.cal_links || {} }, team).then(r => { const bad = r.filter(x => !x.ok);
               if (bad.length) toast(`Cal.com link for Round ${bad.map(x => x.n).join(', ')} wasn't created. Open the job's Panel and rounds tab to retry.`, true); }); }
       catch (e) { btn.disabled = false; fail(e); }
@@ -1452,6 +1460,70 @@
         catch (e) { b.disabled = false; fail(e); } });
     };
     draw();
+  }
+  // Job create/edit form → Candidate emails: pick Default or a version just for this job. Nothing is saved until the job is saved.
+  async function jobTemplatesEditor(host, job, getSender, getTitle) {
+    let defs = [], own0 = [];
+    try { [defs, own0] = await Promise.all([api.templates(), job?.id ? api.jobTemplates(job.id) : []]); } catch (e) { host.innerHTML = '<div class="small muted">Could not load the email templates. You can still set them later on the job\'s Emails tab.</div>'; return { value: () => ({ changes: [] }) }; }
+    const own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
+    const order = ['received', 'screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
+    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
+    const st = Object.fromEntries(ts.map(t => { const o = own[t.key];
+      // A job row that only switches an email off (same wording as the default) still counts as "Default"
+      return [t.key, { custom: !!o && (o.subject !== t.subject || o.body !== t.body), subject: (o || t).subject || '', body: (o || t).body || '', enabled: (o ? o.enabled : t.enabled) !== false, defOn: t.enabled !== false }]; }));
+    const open = new Set();
+    const draw = () => {
+      const nCustom = ts.filter(t => st[t.key].custom || st[t.key].enabled !== st[t.key].defOn).length;
+      host.innerHTML = `<div class="small muted">Every email starts on the default from Settings → Email templates. Switch one to <b>Custom for this job</b> to write this job's own version; the others keep following the defaults.${nCustom ? ` <b>${nCustom} customised for this job.</b>` : ''}</div>
+        <div class="jt-list">${ts.map(t => { const s = st[t.key], info = TEMPLATE_INFO[t.key] || { title: t.key, when: '', ph: BASE_PH };
+          return `<div class="jt-item ${open.has(t.key) ? 'open' : ''} ${s.enabled ? '' : 'off'}" data-k="${t.key}">
+            <div class="jt-row"><button type="button" class="jt-tog" data-open="${t.key}" aria-expanded="${open.has(t.key)}"><span class="jt-car">${open.has(t.key) ? '▾' : '▸'}</span><span><b>${esc(info.title)}</b>${s.custom ? ' <span class="chip v-pass">Custom</span>' : ''}${s.enabled ? '' : ' <span class="chip v-review">Off</span>'}<span class="small muted" style="display:block">${esc(info.when)}</span></span></button>
+              <div class="seg sm" role="group" aria-label="${esc(info.title)} email"><button type="button" data-mode="def" class="${s.custom ? '' : 'on'}">Default</button><button type="button" data-mode="cus" class="${s.custom ? 'on' : ''}">Custom for this job</button></div>
+              <label class="row small" style="gap:6px;white-space:nowrap"><input type="checkbox" data-on ${s.enabled ? 'checked' : ''}> Send</label></div>
+            ${open.has(t.key) ? `<div class="jt-body">
+              <div class="field"><label>Subject</label><input class="input" data-subj value="${esc(s.subject)}" ${s.custom ? '' : 'disabled'}></div>
+              <div class="field"><label>Message</label><textarea class="input" rows="8" data-body ${s.custom ? '' : 'disabled'}>${esc(s.body)}</textarea></div>
+              ${s.custom ? `<div class="row" style="gap:6px"><span class="small muted">Insert:</span>${[...info.ph, 'sender_name'].filter((p, i, a) => a.indexOf(p) === i).map(p => `<button type="button" class="tag ph" data-ph="${p}">{{${p}}}</button>`).join('')}</div>`
+                : '<div class="small muted">This is the default wording. Choose <b>Custom for this job</b> to change it for this job only.</div>'}
+              <div><button type="button" class="btn sm ghost" data-prev>Preview</button><div class="preview" data-preview hidden></div></div></div>` : ''}</div>`; }).join('')}</div>`;
+      $$('.jt-item', host).forEach(el => { const k = el.dataset.k, s = st[k], def = ts.find(t => t.key === k);
+        $('[data-open]', el).onclick = () => { open.has(k) ? open.delete(k) : open.add(k); draw(); };
+        $$('[data-mode]', el).forEach(b => b.onclick = () => { const c = b.dataset.mode === 'cus'; if (c === s.custom) return;
+          s.custom = c; if (!c) { s.subject = def.subject || ''; s.body = def.body || ''; } open.add(k); draw();
+          if (c) $('[data-body]', $(`.jt-item[data-k="${k}"]`, host))?.focus(); });
+        $('[data-on]', el).onchange = e => { s.enabled = e.target.checked; draw(); };
+        const subj = $('[data-subj]', el), body = $('[data-body]', el); let last = body;
+        if (subj) { subj.oninput = () => s.subject = subj.value; subj.onfocus = () => last = subj; }
+        if (body) { body.oninput = () => s.body = body.value; body.onfocus = () => last = body; }
+        $$('[data-ph]', el).forEach(b => b.onclick = () => { const f = last || body, ins = `{{${b.dataset.ph}}}`, a = f.selectionStart ?? f.value.length, z = f.selectionEnd ?? a;
+          f.value = f.value.slice(0, a) + ins + f.value.slice(z); f.dispatchEvent(new Event('input')); f.focus(); f.selectionStart = f.selectionEnd = a + ins.length; });
+        const pv = $('[data-prev]', el); if (pv) pv.onclick = () => { const box = $('[data-preview]', el);
+          const smp = x => fillSample(String(x).replace(/\{\{\s*job_title\s*\}\}/g, getTitle() || SAMPLE.job_title).replace(/\{\{\s*sender_name\s*\}\}/g, getSender()));
+          box.hidden = !box.hidden; pv.textContent = box.hidden ? 'Preview' : 'Hide preview';
+          box.innerHTML = `<div class="small muted">Example with sample details · from ${esc(getSender())}</div><b>${esc(smp(s.subject))}</b><div style="white-space:pre-wrap;margin-top:8px">${esc(smp(s.body))}</div>`; }; });
+    };
+    draw();
+    return {
+      value() {
+        const changes = [];
+        for (const t of ts) { const s = st[t.key], o = own[t.key], info = TEMPLATE_INFO[t.key] || {};
+          const needRow = s.custom || s.enabled !== s.defOn;
+          if (needRow) {
+            const subject = (s.custom ? s.subject : t.subject || '').trim(), body = (s.custom ? s.body : t.body || '').trim();
+            if (!subject || !body) return { error: `The ${info.title || t.key} email needs a subject and a message.`, key: t.key };
+            if (info.need && s.enabled && !body.includes(`{{${info.need}}}`)) return { error: `Keep {{${info.need}}} in the ${info.title} email, or candidates cannot book their interview.`, key: t.key };
+            if (!o || o.subject !== subject || o.body !== body || (o.enabled !== false) !== s.enabled) changes.push({ key: t.key, data: { subject, body, enabled: s.enabled } });
+          } else if (o) changes.push({ key: t.key, reset: true });
+        }
+        return { changes };
+      },
+      show(key) { open.add(key); draw(); $(`.jt-item[data-k="${key}"]`, host)?.scrollIntoView({ block: 'center' }); }
+    };
+  }
+  async function saveJobTemplates(jobId, changes) {
+    const bad = [];
+    for (const c of changes) { try { c.reset ? await api.resetJobTemplate(jobId, c.key) : await api.saveJobTemplate(jobId, c.key, c.data); } catch (e) { bad.push(c.key); } }
+    return bad;
   }
   // Ask before throwing away a job's own version of an email: click twice (no browser dialog)
   let resetPending = null;

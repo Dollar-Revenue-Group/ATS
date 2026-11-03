@@ -531,3 +531,15 @@ details.card[open]>summary h3::before{content:'▾ '}
 .pick-chip:hover{border-color:var(--accent)}
 .pick-chip.on{border-style:solid;border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong)}
 @media (max-width:760px){.sc-head{display:none}.sc-row{grid-template-columns:1fr 1fr;}.sc-modes{grid-template-columns:1fr}}
+
+/* ── job form: candidate emails ── */
+.jt-list{display:grid;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:8px}
+.jt-item{border-bottom:1px solid var(--line);background:var(--surface)}
+.jt-item:last-child{border-bottom:0}
+.jt-item.off .jt-tog b{color:var(--muted)}
+.jt-item.open{background:var(--surface-2)}
+.jt-row{display:flex;align-items:center;gap:12px;padding:10px 14px;flex-wrap:wrap}
+.jt-tog{flex:1;min-width:220px;display:flex;gap:8px;align-items:flex-start;text-align:left;border:0;background:none;padding:0;cursor:pointer;color:var(--ink);font:inherit}
+.jt-car{color:var(--muted);width:12px;flex:none;margin-top:1px}
+.jt-body{display:grid;gap:10px;padding:0 14px 14px 34px}
+.seg.sm button{padding:5px 10px;font-size:12px}

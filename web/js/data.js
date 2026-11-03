@@ -332,6 +332,7 @@
         meeting_link: 'https://meet.google.com/abc-defg-hij', status, rating: status === 'completed' ? 4 : null, recommendation: status === 'completed' ? 'yes' : null,
         feedback: status === 'completed' ? 'Confident on the phone, handled objections well. Good fit for the team.' : null, created_at: iso(now - 4 * day) }));
     const templates = [
+      { key: 'round_1', subject: 'Book your {{round_name}} for {{job_title}}', body: 'Hi {{candidate_name}},\n\nGood news: we would like to meet you. Please pick a time that suits you:\n{{booking_link}}\n\n{{sender_name}}', enabled: true },
       { key: 'received', subject: 'We received your application for {{job_title}}', body: 'Hi {{candidate_name}},\n\nThank you for applying for the {{job_title}} role at DRG. Our team is reviewing your application and will be in touch soon.\n\nBest regards,\nDRG Talent Team' },
       { key: 'interview_invite', subject: 'Interview for {{job_title}} on {{interview_time}}', body: 'Hi {{candidate_name}},\n\nWe would like to invite you to an interview for the {{job_title}} role on {{interview_time}} (IST).\n\nJoin here: {{meeting_link}}\n\nBest regards,\nDRG Talent Team' },
       { key: 'rejection', subject: 'Your application for {{job_title}}', body: 'Hi {{candidate_name}},\n\nThank you for your interest in the {{job_title}} role at DRG. After careful review, we have decided to move forward with other candidates.\n\nWe wish you the very best.\n\nDRG Talent Team' },
