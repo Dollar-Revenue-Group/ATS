@@ -1729,8 +1729,8 @@
   const ROUND_PH = [...BASE_PH, 'round_name', 'round_number', 'interviewer_name', 'duration', 'booking_link'];
   const TEMPLATE_INFO = {
     received: { title: 'Applied', when: 'Sent when a candidate applies on the careers site or you upload their resume.', ph: BASE_PH },
-    screened: { title: 'Screened', when: 'Sent when a candidate moves to Screened. Off by default: the AI moves every new applicant to Screened, so switching this on emails everyone once they are scored.', ph: BASE_PH },
-    manual_screened: { title: 'Manual Screened', when: 'Sent when you move a candidate to Manual Screened after reviewing them yourself.', ph: BASE_PH },
+    screened: { title: 'Screened', when: 'Off for every job: the AI moves every new applicant to Screened, so no email is sent here. Candidates get the Manual Screened email once you have reviewed them.', ph: BASE_PH },
+    manual_screened: { title: 'Manual Screened', when: 'Sent when you move a candidate to Manual Screened after reviewing them yourself. On by default; switch it off on any job that should not send it.', ph: BASE_PH },
     round_1: { title: 'Round 1', when: "Sent when a candidate is moved to Round 1. Includes the link to book a time with Round 1's interviewer (set on each job under Panel and rounds).", ph: ROUND_PH, need: 'booking_link' },
     round_2: { title: 'Round 2', when: "Sent when a candidate is moved to Round 2, with the booking link for Round 2's interviewer.", ph: ROUND_PH, need: 'booking_link' },
     round_3: { title: 'Round 3', when: "Sent when a candidate is moved to Round 3, with the booking link for Round 3's interviewer.", ph: ROUND_PH, need: 'booking_link' },
@@ -1834,7 +1834,8 @@
     const [defs, own0, senders] = await Promise.all([api.templates(), api.jobTemplates(job.id), api.senders().catch(() => [])]);
     let own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
     const stageOrder = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
-    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
+    // Screened never emails (switched off for every job), so it is not offered per job
+    const ts = defs.filter(t => !['round_invite', 'screened'].includes(t.key)).sort((a, b) => (stageOrder.indexOf(a.key) + 1 || 99) - (stageOrder.indexOf(b.key) + 1 || 99));
     const dis = canEdit ? '' : 'disabled';
     const active = senders.filter(s => s.active !== false || s.id === job.sender_id);
     const cur = () => senders.find(s => s.id === job.sender_id) || senders.find(s => s.is_default) || { from_name: 'DRG Talent Team' };
@@ -1842,9 +1843,11 @@
       ? `Candidates see <b>${esc(s.from_name)}</b> &lt;${esc(s.from_email)}&gt;${s.reply_to ? ` and replies go to ${esc(s.reply_to)}` : ''}. ${esc(s.from_email)} must be set up as a "Send mail as" address on the hiring mailbox (Settings → Email templates explains how); until then emails go out from the hiring mailbox address with this name.`
       : `Candidates see <b>${esc(s.from_name)}</b> from the hiring mailbox.`; };
     const card = t => { const info = TEMPLATE_INFO[t.key] || { title: t.key, when: '', ph: BASE_PH }, o = own[t.key], src = o || t, on = (o ? o.enabled : t.enabled) !== false;
+      const custom = !!o && (o.subject !== t.subject || o.body !== t.body);
       return `<details class="card tpl ${on ? '' : 'off'}" data-jt="${t.key}"><summary class="card-h" style="cursor:pointer;list-style:none">
-          <div><h3>${esc(info.title)} ${o ? '<span class="chip v-pass">Custom for this job</span>' : '<span class="chip">Default</span>'}${on ? '' : ' <span class="chip v-review">Off for this job</span>'}</h3>
-            <div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div><span class="small muted">${canEdit ? 'Edit' : 'View'} ▾</span></summary>
+          <div><h3>${esc(info.title)} ${custom ? '<span class="chip v-pass">Custom for this job</span>' : '<span class="chip">Default</span>'}${on ? '' : ' <span class="chip v-review">Off for this job</span>'}</h3>
+            <div class="small muted" style="max-width:70ch">${esc(info.when)}</div></div>
+          <span class="row" style="gap:12px;white-space:nowrap"><label class="row small jt-switch" style="gap:6px" title="Send this email for this job"><input type="checkbox" data-jsw="${t.key}" ${on ? 'checked' : ''} ${dis}> ${on ? 'On' : 'Off'}</label><span class="small muted">${canEdit ? 'Edit' : 'View'} ▾</span></span></summary>
         <div class="card-b" style="display:grid;gap:10px">
           <div class="field"><label for="js-${t.key}">Subject</label><input class="input" id="js-${t.key}" data-subj="${t.key}" value="${esc(src.subject)}" ${dis}></div>
           <div class="field"><label for="jb-${t.key}">Message</label><textarea class="input" rows="9" id="jb-${t.key}" data-body="${t.key}" ${dis}>${esc(src.body)}</textarea></div>
@@ -1876,7 +1879,14 @@
         const smp = s => fillSample(String(s).replace(/\{\{\s*job_title\s*\}\}/g, job.title).replace(/\{\{\s*sender_name\s*\}\}/g, cur().from_name));
         box.hidden = !box.hidden; b.textContent = box.hidden ? 'Preview' : 'Hide preview';
         box.innerHTML = `<div class="small muted">Example with sample details · from ${esc(cur().from_name)}</div><b>${esc(smp($(`[data-subj="${k}"]`, body).value))}</b><div style="white-space:pre-wrap;margin-top:8px">${esc(smp($(`[data-body="${k}"]`, body).value))}</div>`; });
+      $$('[data-jsw]', body).forEach(c => { const lab = c.closest('label'); lab.onclick = e => e.stopPropagation(); });
       if (!canEdit) return;
+      // Header switch: turn this email on or off for this job straight away (keeps the job's wording, or the default wording)
+      $$('[data-jsw]', body).forEach(c => c.onchange = async () => { const k = c.dataset.jsw, info = TEMPLATE_INFO[k] || {}, def = ts.find(t => t.key === k) || {}, o = own[k];
+        const subject = (o || def).subject || '', text = (o || def).body || '';
+        c.disabled = true;
+        try { own[k] = await api.saveJobTemplate(job.id, k, { subject, body: text, enabled: c.checked }); draw(); toast(`${info.title || k} email ${c.checked ? 'switched on' : 'switched off'} for this job`); }
+        catch (e) { c.checked = !c.checked; c.disabled = false; fail(e); } });
       $$('[data-save]', body).forEach(b => b.onclick = async () => { const k = b.dataset.save, info = TEMPLATE_INFO[k] || {};
         const subject = $(`[data-subj="${k}"]`, body).value.trim(), text = $(`[data-body="${k}"]`, body).value.trim(), enabled = $(`[data-jon="${k}"]`, body).checked;
         if (!subject || !text) return toast('Add a subject and a message.', true);
@@ -1898,7 +1908,7 @@
     try { [defs, own0] = await Promise.all([api.templates(), job?.id ? api.jobTemplates(job.id) : []]); } catch (e) { host.innerHTML = '<div class="small muted">Could not load the email templates. You can still set them later on the job\'s Emails tab.</div>'; return { value: () => ({ changes: [] }) }; }
     const own = Object.fromEntries((own0 || []).map(t => [t.key, t]));
     const order = ['received', 'screened', 'manual_screened', 'round_1', 'round_2', 'round_3', 'offer', 'hired', 'rejection', 'interview_invite'];
-    const ts = defs.filter(t => t.key !== 'round_invite').sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
+    const ts = defs.filter(t => !['round_invite', 'screened'].includes(t.key)).sort((a, b) => (order.indexOf(a.key) + 1 || 99) - (order.indexOf(b.key) + 1 || 99));
     const st = Object.fromEntries(ts.map(t => { const o = own[t.key];
       // A job row that only switches an email off (same wording as the default) still counts as "Default"
       return [t.key, { custom: !!o && (o.subject !== t.subject || o.body !== t.body), subject: (o || t).subject || '', body: (o || t).body || '', enabled: (o ? o.enabled : t.enabled) !== false, defOn: t.enabled !== false }]; }));
