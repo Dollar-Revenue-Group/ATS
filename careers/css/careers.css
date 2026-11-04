@@ -42,6 +42,6 @@ body{display:flex;flex-direction:column;min-height:100vh}
 .phone-row input.input{font-size:17px;letter-spacing:.02em}
 @media (max-width:420px){.phone-row{grid-template-columns:minmax(0,1fr)}}
 
-.money-row{display:grid;grid-template-columns:minmax(190px,280px) minmax(0,1fr);gap:8px;max-width:560px}
+.money-row{display:grid;grid-template-columns:minmax(170px,240px) minmax(0,1fr) minmax(140px,170px);gap:8px;max-width:640px}
 .money-row select.input{padding-right:28px;text-overflow:ellipsis}
-@media (max-width:420px){.money-row{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:520px){.money-row{grid-template-columns:minmax(0,1fr) minmax(110px,40%)}.money-row select[data-cur]{grid-column:1/-1}}

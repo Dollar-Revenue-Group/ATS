@@ -28,6 +28,8 @@
     BD: 'BDT', LK: 'LKR', NP: 'NPR', PH: 'PHP', MY: 'MYR', ID: 'IDR', TH: 'THB', VN: 'VND', NG: 'NGN', KE: 'KES', ZA: 'ZAR', EG: 'EGP', TR: 'TRY', NZ: 'NZD', CH: 'CHF',
     JP: 'JPY', CN: 'CNY', HK: 'HKD', BR: 'BRL', MX: 'MXN', PL: 'PLN', SE: 'SEK', DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', NL: 'EUR', IE: 'EUR', BE: 'EUR', AT: 'EUR',
     PT: 'EUR', FI: 'EUR', GR: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', SK: 'EUR', CY: 'EUR', HR: 'EUR' };
+  // CTC in India is usually quoted per year; elsewhere per month (the applicant can change it)
+  const perFor = cur => cur === 'INR' ? 'year' : 'month';
   const curOptions = sel => CURRENCIES.map(([c, n]) => `<option value="${c}" ${c === sel ? 'selected' : ''}>${c} · ${n}</option>`).join('');
   const flag = iso => String.fromCodePoint(...[...iso].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
   const guessCountry = () => { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
@@ -153,7 +155,8 @@
     if (f.type === 'select') return `<div class="field"><label for="${id}">${esc(f.label)}${req}</label>${help}<select class="input" id="${id}" data-q="${esc(f.id)}" ${aria}><option value="">Choose…</option>${(f.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select></div>`;
     if (f.type === 'money') return `<div class="field"><label for="${id}">${esc(f.label)}${req}</label>${help}
       <div class="money-row"><select class="input" data-cur="${esc(f.id)}" aria-label="${esc(f.label)} currency">${curOptions(COUNTRY_CUR[guessCountry()] || 'USD')}</select>
-        <input class="input" id="${id}" data-q="${esc(f.id)}" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 1200000" maxlength="20" ${aria}></div></div>`;
+        <input class="input" id="${id}" data-q="${esc(f.id)}" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 1200000" maxlength="20" ${aria}>
+        <select class="input" data-per="${esc(f.id)}" aria-label="${esc(f.label)} period">${['month', 'year'].map(x => `<option value="${x}" ${x === perFor(COUNTRY_CUR[guessCountry()] || 'USD') ? 'selected' : ''}>per ${x}</option>`).join('')}</select></div></div>`;
     if (f.type === 'file') return `<div class="field"><span class="lbl" style="font-weight:600;font-size:13px">${esc(f.label)}${req}</span>${help}
       <label class="file-pick"><input type="file" data-file="${esc(f.id)}" accept=".pdf,.docx,.png,.jpg,.jpeg" ${aria}><span>📎</span><b data-fname="${esc(f.id)}">Choose a file</b><span class="small muted">PDF, DOCX, PNG or JPG · up to 5 MB</span></label></div>`;
     const type = { url: 'url', email: 'email', number: 'number' }[f.type] || 'text';
@@ -192,8 +195,10 @@
         <button class="btn primary" id="sub" style="justify-self:start">Submit application</button></form>`;
     const f = $('#af'), msg = $('#msg'), sub = $('#sub');
     // Currency follows the phone country until the applicant picks one themselves
-    $$('[data-cur]', f).forEach(c => c.onchange = () => { c.dataset.picked = '1'; });
-    $('#pcc').addEventListener('change', () => { const cur = COUNTRY_CUR[$('#pcc').value]; if (cur) $$('[data-cur]', f).forEach(c => { if (!c.dataset.picked) c.value = cur; }); });
+    const syncPer = c => { const pr = $(`[data-per="${c.dataset.cur}"]`, f); if (pr && !pr.dataset.picked) pr.value = perFor(c.value); };
+    $$('[data-per]', f).forEach(pr => pr.onchange = () => { pr.dataset.picked = '1'; });
+    $$('[data-cur]', f).forEach(c => c.onchange = () => { c.dataset.picked = '1'; syncPer(c); });
+    $('#pcc').addEventListener('change', () => { const cur = COUNTRY_CUR[$('#pcc').value]; if (cur) $$('[data-cur]', f).forEach(c => { if (!c.dataset.picked) { c.value = cur; syncPer(c); } }); });
     $('#cv').onchange = e => { $('#cvname').textContent = e.target.files[0]?.name || 'Choose your resume'; };
     $$('[data-file]', f).forEach(i => i.onchange = () => { $(`[data-fname="${i.dataset.file}"]`, f).textContent = i.files[0]?.name || 'Choose a file'; });
     const err = (t, focus) => { msg.textContent = t; msg.className = 'small err-msg'; focus?.focus(); };
@@ -230,7 +235,7 @@
           if (q.type === 'money') {
             const n = v.replace(/[\s,]/g, '');
             if (!/^\d+(\.\d+)?$/.test(n) || !(+n > 0)) return err(`${q.label}: please enter the amount as a number, for example 1200000.`, inp);
-            answers[q.id] = `${+n} ${$(`[data-cur="${q.id}"]`, f).value}`; continue;
+            answers[q.id] = `${+n} ${$(`[data-cur="${q.id}"]`, f).value} / ${$(`[data-per="${q.id}"]`, f)?.value || 'month'}`; continue;
           }
           answers[q.id] = v;
         }

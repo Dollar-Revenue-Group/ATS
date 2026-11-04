@@ -936,20 +936,49 @@
       ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
       ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}`;
   }
-  /* Salary answers: read "1200000 PKR" (or older free text like "165k PKR") and show it in USD at today's rate */
-  const CUR_SYM = { '$': 'USD', '₹': 'INR', '€': 'EUR', '£': 'GBP', 'rs': 'INR', 'rs.': 'INR' };
-  const MULT = { k: 1e3, thousand: 1e3, l: 1e5, lac: 1e5, lakh: 1e5, lakhs: 1e5, lacs: 1e5, m: 1e6, mn: 1e6, million: 1e6, cr: 1e7, crore: 1e7, crores: 1e7 };
-  function moneyOf(q) {
-    const v = String(q?.value || '').trim(); if (!v || v.length > 60) return null;
+  /* Salary answers: read "1200000 INR / year", "165k PKR" or "65000" and show a monthly USD figure at today's rate */
+  const CUR_SYM = { '$': 'USD', '₹': 'INR', '€': 'EUR', '£': 'GBP' };
+  const MULT = { k: 1e3, thousand: 1e3, l: 1e5, lac: 1e5, lacs: 1e5, lakh: 1e5, lakhs: 1e5, lpa: 1e5, m: 1e6, mn: 1e6, million: 1e6, cr: 1e7, crore: 1e7, crores: 1e7 };
+  // Phone country code -> usual currency, for answers typed without one
+  const DIAL_CUR = [['971', 'AED'], ['880', 'BDT'], ['977', 'NPR'], ['966', 'SAR'], ['974', 'QAR'], ['965', 'KWD'], ['973', 'BHD'], ['968', 'OMR'], ['234', 'NGN'], ['254', 'KES'],
+    ['91', 'INR'], ['92', 'PKR'], ['94', 'LKR'], ['44', 'GBP'], ['63', 'PHP'], ['65', 'SGD'], ['60', 'MYR'], ['62', 'IDR'], ['66', 'THB'], ['84', 'VND'], ['20', 'EGP'], ['27', 'ZAR'], ['61', 'AUD'], ['1', 'USD']];
+  const curFromPhone = ph => { const d = String(ph || '').replace(/[^\d+]/g, ''); if (!d.startsWith('+')) return null; const x = DIAL_CUR.find(([c]) => d.startsWith('+' + c)); return x ? x[1] : null; };
+  function moneyOf(q, cand) {
+    let v = String(q?.value || '').trim(); if (!v || v.length > 80) return null;
     if (q.type !== 'money' && !/ctc|salary|compensation|pay|package|income/i.test(q.label || '')) return null;
-    const m = v.match(/^([A-Za-z]{3}|[$₹€£]|rs\.?)?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|l|lacs?|lakhs?|m|mn|million|thousand|cr|crores?)?\.?\s*([A-Za-z]{3}|[$₹€£])?(?:\s*(?:\/|per|a)\s*(\w+))?\s*$/i);
+    let per = null;                                                        // 'month' | 'year' when the answer says so
+    if (/\b(per\s*month|monthly|p\.?\s?m\.?|a month)\b|\/\s*(month|mo|m)\b/i.test(v)) per = 'month';
+    if (/\b(per\s*(annum|year)|annual(ly)?|yearly|p\.?\s?a\.?|lpa|a year)\b|\/\s*(year|yr|y|annum)\b/i.test(v)) per = 'year';
+    v = v.replace(/,?\s*(negotiable|approx\.?|around|about)\b.*$/i, '').replace(/\b(per\s*(month|annum|year)|monthly|annual(ly)?|yearly|a month|a year)\b/ig, '').replace(/\/\s*\w+\s*$/, '').trim();
+    let cur = null;
+    if (/\brs\.?\s*pk|\bpk\s*rs|pkr|pak(istani)?\s*rupees?/i.test(v)) cur = 'PKR';
+    else if (/\binr\b|indian\s*rupees?|₹/i.test(v)) cur = 'INR';
+    v = v.replace(/\brs\.?\s*pk\b|\bpk\s*rs\b|pak(istani)?\s*rupees?|indian\s*rupees?|\brupees?\b|\brs\.?/ig, ' ').trim();
+    const m = v.match(/^([A-Za-z]{3}|[$₹€£])?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|l|lacs?|lakhs?|lpa|m|mn|million|thousand|cr|crores?)?\.?\s*([A-Za-z]{3}|[$₹€£])?\s*$/i);
     if (!m) return null;
-    const code = x => !x ? null : CUR_SYM[x.toLowerCase()] || (/^[A-Za-z]{3}$/.test(x) ? x.toUpperCase() : null);
-    const cur = code(m[4]) || code(m[1]); if (!cur || !/^[A-Z]{3}$/.test(cur)) return null;
-    const amount = parseFloat(m[2].replace(/,/g, '')) * (MULT[(m[3] || '').toLowerCase()] || 1);
-    return amount > 0 ? { amount, cur, per: m[5] ? ' / ' + m[5].toLowerCase() : '' } : null;
+    const code = x => !x ? null : CUR_SYM[x] || (/^[A-Za-z]{3}$/.test(x) && !/^(lpa|lac|cr)$/i.test(x) ? x.toUpperCase() : null);
+    const unit = (m[3] || '').toLowerCase();
+    let assumedCur = false;
+    cur = cur || code(m[4]) || code(m[1]);
+    if (!cur && /^(l|lacs?|lakhs?|lpa|cr|crores?)$/.test(unit)) cur = 'INR';      // lakh / crore are Indian units
+    if (!cur) { cur = curFromPhone(cand?.phone); assumedCur = !!cur; }
+    if (!cur) return null;
+    if (unit === 'lpa') per = 'year';
+    const amount = parseFloat(m[2].replace(/,/g, '')) * (MULT[unit] || 1);
+    if (!(amount >= 100)) return null;                                     // "0", "1": not a real figure
+    if (!per && /annual|yearly|per annum/i.test(q.label || '')) per = 'year';
+    if (!per && /monthly|per month/i.test(q.label || '')) per = 'month';
+    return { amount, cur, per, assumedCur };
   }
   const fmtMoney = (n, cur) => `${Math.round(n).toLocaleString('en-US')} ${cur}`;
+  // Monthly USD: use the period given; otherwise judge by size (over $6,000 is a yearly figure, under $2,400 a monthly one)
+  // and, in between, Indian rupee CTC is yearly by convention, other currencies monthly
+  function monthlyUsd(amount, cur, per, rates) {
+    const r = cur === 'USD' ? 1 : rates?.[cur]; if (!r) return null;
+    const usd = amount / r; let p = per, assumed = false;
+    if (!p) { assumed = true; p = usd > 6000 ? 'year' : usd < 2400 ? 'month' : cur === 'INR' ? 'year' : 'month'; }
+    return { month: p === 'year' ? usd / 12 : usd, year: p === 'year' ? usd : usd * 12, per: p, assumed, rate: r };
+  }
   // Exchange rates (US dollar base) from open.er-api.com, refreshed once a day and kept in this browser
   let fxP = null;
   function fxRates() {
@@ -963,14 +992,16 @@
       return c; }).catch(e => { fxP = null; throw e; });
     return fxP;
   }
+  const usd0 = n => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   function fillFx(root) {
     const els = $$('[data-fx-amt]', root); if (!els.length) return;
-    fxRates().then(fx => els.forEach(el => { const r = fx.rates[el.dataset.fxCur];
-      if (!r) { el.textContent = ''; return; }
-      const usd = +el.dataset.fxAmt / r;
-      el.innerHTML = `<b class="fx-usd">≈ ${usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</b> <span class="small muted">at 1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur}</span>`;
-      el.title = `1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur} · rate of ${new Date(fx.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }))
-      .catch(() => els.forEach(el => { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); }));
+    const paint = rates => els.forEach(el => { const x = monthlyUsd(+el.dataset.fxAmt, el.dataset.fxCur, el.dataset.fxPer || null, rates);
+      if (!x) { el.textContent = ''; return; }
+      el.innerHTML = `<b class="fx-usd">≈ ${usd0(x.month)} / month</b>${x.assumed && x.per === 'year' ? ' <span class="small muted">(read as a yearly figure)</span>' : ''}`;
+      el.title = `${usd0(x.year)} a year`; });
+    const allUsd = els.every(el => el.dataset.fxCur === 'USD');
+    if (allUsd) return paint({});
+    fxRates().then(fx => paint(fx.rates)).catch(() => els.forEach(el => { if (el.dataset.fxCur === 'USD') paint({}); else { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); } }));
   }
   function candidateBody(a, iscores, canAct, mode) {
     const c = a.candidates || {}; const sc = a.screening; const failed = failedMailsOf(a);
@@ -989,9 +1020,9 @@
             <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
         : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
       ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
-        ${(a.form_answers || []).map(q => { const m = moneyOf(q);
+        ${(a.form_answers || []).map(q => { const m = moneyOf(q, c);
           return `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>`
-            : m ? `${esc(fmtMoney(m.amount, m.cur) + m.per)}${m.cur !== 'USD' ? ` <span class="fx" data-fx-amt="${m.amount}" data-fx-cur="${m.cur}"></span>` : ''}` : esc(q.value)}</div></div>`; }).join('')}
+            : m ? `<span title="Answer: ${esc(q.value)}">${esc(fmtMoney(m.amount, m.cur) + (m.per ? ' / ' + m.per : ''))}</span>${m.assumedCur ? ` <span class="small muted">(${m.cur} assumed from phone)</span>` : ''} <span class="fx" data-fx-amt="${m.amount}" data-fx-cur="${m.cur}" data-fx-per="${m.per || ''}"></span>` : esc(q.value)}</div></div>`; }).join('')}
         ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
       ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
         ${c.profile_summary ? `<p class="prose">${esc(c.profile_summary)}</p>` : ''}
