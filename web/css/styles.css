@@ -843,3 +843,16 @@ body.col-resizing{cursor:col-resize;user-select:none}
 #bpan{display:inline-flex;gap:6px;align-items:center}
 #bpl,#bpr{display:inline-flex;align-items:center;padding-left:10px;padding-right:10px}
 #bpl:disabled,#bpr:disabled{opacity:.35;cursor:default}
+
+/* Interview done (this round) */
+:root{--done:#7C3AED;--done-soft:rgba(124,58,237,.10)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--done:#A78BFA;--done-soft:rgba(167,139,250,.14)}}
+:root[data-theme="dark"]{--done:#A78BFA;--done-soft:rgba(167,139,250,.14)}
+.legend-done{color:var(--done);font-weight:600}
+.kcard.done{border-color:var(--done);box-shadow:inset 4px 0 0 var(--done);background:linear-gradient(0deg,var(--done-soft),var(--done-soft)),var(--surface)}
+.board .kcard.done:hover{border-color:var(--done)}
+.done-tag{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;background:var(--done-soft);color:var(--done);font-size:12px;line-height:1.35}
+.done-tag svg{flex:none;margin-top:2px}
+.done-tag b{display:block;font-size:12px;white-space:normal}
+.done-tag span{color:var(--ink-2)}
+.done-tag span b{color:var(--done)}
