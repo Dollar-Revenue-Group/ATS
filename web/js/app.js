@@ -2136,6 +2136,7 @@
           <div><dt>${icon('cal', 14)}Hours</dt><dd>${esc(hours(t))}</dd></div>
           <div><dt>${icon('dash', 14)}Time zone</dt><dd>${esc(t.timezone || 'Asia/Kolkata')}</dd></div>
           <div><dt>${icon('people', 14)}Meeting link</dt><dd>${t.meeting_link ? `<a href="${esc(t.meeting_link)}" target="_blank" rel="noopener">Open ↗</a>` : '<span style="color:var(--review)">Missing</span>'}${t.booking_url ? ' · <span class="muted">own booking page</span>' : ''}</dd></div>
+          <div><dt>${icon('mail', 14)}"Moved" emails</dt><dd>${t.round_alerts === false ? '<span class="muted">Off · only when an interview is booked</span>' : 'On'}</dd></div>
         </dl>
         <div class="pm-foot">${cal}<span class="grow"></span><button class="btn sm" data-em="${t.id}">Edit</button>
           ${CFG.CALCOM_CONNECT_URL ? `<button class="btn sm ${calOn(t) ? '' : 'primary'}" data-cal="${t.id}">${calOn(t) ? 'Cal.com' : 'Connect Cal.com'}</button>` : ''}</div></article>`; };
@@ -2240,6 +2241,7 @@
       <div class="field"><label for="ms">Offer start times every</label><select class="input" id="ms">${[15, 30, 60].map(x => `<option value="${x}" ${+av.slot === x ? 'selected' : ''}>${x} minutes</option>`).join('')}</select></div>
       <div class="field"><label for="ml">Meeting link (Google Meet, Zoom, Teams)</label><input class="input" id="ml" value="${esc(t?.meeting_link)}" placeholder="Their personal meeting room link"></div>
       <div class="field"><label for="mb">Own booking page (optional)</label><input class="input" id="mb" value="${esc(t?.booking_url)}" placeholder="e.g. a Calendly link. If set, candidates book there instead."></div>
+      <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="mra" ${t?.round_alerts !== false ? 'checked' : ''} style="margin-top:2px"><span>Email them when a candidate is moved into their round, before the candidate books<span class="muted" style="display:block">They always get an email with the calendar invite once an interview is booked with them. Job coordinators get the "moved" email either way.</span></span></label>
       ${t ? `<label class="row small" style="gap:8px"><input type="checkbox" id="ma" ${t.active !== false ? 'checked' : ''}> Active (can be chosen for interviews)</label>` : ''}`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">${t ? 'Save' : 'Add person'}</button>`);
     $$('[data-d]', m.el).forEach(b => b.onclick = () => b.classList.toggle('on'));
@@ -2254,7 +2256,7 @@
       if ([link, book].some(u => u && !/^https:\/\//i.test(u))) return toast('Links must start with https://', true);
       const company = $('#mco', m.el).value.trim() || companyFromEmail(email);
       try { await api.saveMember({ ...(t ? { id: t.id } : {}), full_name: name, email, company, title: $('#mt', m.el).value.trim() || null, timezone: $('#mz', m.el).value,
-          availability: { slot: +$('#ms', m.el).value, days }, meeting_link: link || null, booking_url: book || null, ...(t ? { active: $('#ma', m.el).checked } : {}) });
+          availability: { slot: +$('#ms', m.el).value, days }, meeting_link: link || null, booking_url: book || null, round_alerts: $('#mra', m.el).checked, ...(t ? { active: $('#ma', m.el).checked } : {}) });
         if ($('#msnd', m.el).checked) { try { await api.saveSender({ from_name: company ? `${name.split(' ')[0]} · ${company}` : name, from_email: email, active: true }); toast(`${email} added as an email sender`); }
           catch (er) { toast(/duplicate|unique/i.test(er.message) ? `${email} is already an email sender` : 'Saved, but the sender could not be added: ' + er.message, true); } }
         m.close(); toast(t ? 'Saved' : 'Added to the interview panel'); after?.(); } catch (e) { fail(/duplicate/i.test(e.message) ? new Error('Someone with this email is already on the panel.') : e); } };
