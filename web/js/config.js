@@ -17,6 +17,7 @@
     CALCOM_CREATE_URL: hook('ats/calcom-create-link-test'), // Workflow 15 · creates a round's Cal.com link
     CALCOM_CONNECT_URL: hook('ats/calcom-connect'),        // Workflow 16 · connects an interviewer's Cal.com
     N8N_QUESTIONS_URL: hook('ats/interview-questions'),    // Workflow 17 · AI interview questions for a candidate
+    CALCOM_MEET_URL: hook('ats/calcom-google-meet'),       // Workflow 18 · Google Meet as everyone's Cal.com default
     CAREERS_URL: 'https://careers.dollarrevenuegroup.com' // public careers site
   };
   // Staging branch deploys (staging--drg-ats.netlify.app) and local copies show a label so nobody mistakes them for the live site.

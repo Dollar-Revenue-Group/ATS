@@ -236,6 +236,11 @@
   const bindApps = el => $$('[data-app]', el).forEach(n => { n.onclick = () => openCandidate(n.dataset.app); n.onkeydown = e => e.key === 'Enter' && openCandidate(n.dataset.app); });
 
   /* ───────── jobs ───────── */
+  // Interview finished for the round the candidate is in: scored for that round, or the interview has been held
+  const ivState = c => !STAGE_ROUND[c.stage_id] ? null
+    : c.interview_at && new Date(c.interview_at) > Date.now() ? 'booked'
+    : (c.iscore_round != null || c.interview_done_at) ? 'done' : c.interview_at ? 'booked' : null;
+  const doneTag = c => `<div class="done-tag"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8.5 3 3 7-7"/></svg><span><b>Round ${STAGE_ROUND[c.stage_id]} interview done</b>${c.iscore_round != null ? `Scored ${c.iscore_round}/100 · ready for the next step` : 'Score not added yet'}${c.interview_done_at ? ` · ${fmtDate(c.interview_done_at)}` : ''}</span></div>`;
   // Stage accent colours (same palette as the Slack stage cards)
   const STAGE_HUE = { 1: '#8A8A8A', 2: '#3B82F6', 9: '#14B8A6', 3: '#22C55E', 4: '#16A34A', 8: '#8B5CF6', 10: '#A855F7', 11: '#D946EF', 5: '#C9CF1F', 6: '#1BDF4D', 7: '#E5484D' };
   const STAGE_COLORS = ['#9FB3B8', '#2563A8', '#3B82C4', '#178A35', '#3FA62E', '#5DBB2C', '#8FBF1F', '#B5C91A', '#B4720E', '#1C8B57'];
@@ -697,7 +702,7 @@
     try { bv = Object.assign(bv, JSON.parse(localStorage.getItem(BV_KEY) || '{}')); } catch (e) { /* defaults */ }
     const saveBv = () => { try { localStorage.setItem(BV_KEY, JSON.stringify(bv)); } catch (e) { /* storage off */ } };
     const colW = id => Math.max(180, Math.min(620, bv.w[id] || bv.def));
-    el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Blue cards</span> have an interview booked.</p></div>
+    el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Blue cards</span> have an interview booked; <span class="legend-done">purple cards</span> have finished this round's interview.</p></div>
       <div class="board-tools"><button class="btn sm" id="copylinks" aria-haspopup="menu">${icon('cal', 15)}Copy booking link ▾</button><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
         <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="iscore">Interview score</button><button data-s="new">Newest</button></div>
@@ -718,9 +723,9 @@
         const shut = bv.collapsed.includes(s.id);
         if (shut) return `<section class="col shut" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'}"><button class="col-open" data-coltog="${s.id}" title="Show ${esc(s.name)}" aria-label="Show ${esc(s.name)}"><span class="col-dot"></span><span class="n">${list.length}</span><span class="col-vt">${esc(s.name)}</span></button></section>${ci < cols.length - 1 ? '<div class="col-gap"></div>' : ''}`;
         return `<section class="col" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'};width:${colW(s.id)}px"><div class="col-h"><span class="col-t"><span class="col-dot"></span><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="col-copy" data-coltog="${s.id}" title="Collapse ${esc(s.name)}" aria-label="Collapse ${esc(s.name)}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4 6 8l4 4"/></svg></button>${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
-          <div class="col-b">${list.map(c => `<article class="kcard${c.interview_at ? ' booked' : ''}" draggable="${bv.pan ? 'false' : 'true'}" data-card="${c.id}" tabindex="0">
+          <div class="col-b">${list.map(c => `<article class="kcard${ivState(c) === 'done' ? ' done' : c.interview_at ? ' booked' : ''}" draggable="${bv.pan ? 'false' : 'true'}" data-card="${c.id}" tabindex="0">
             <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b title="${esc(c.full_name)}">${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div><a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
-            ${c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
+            ${ivState(c) === 'done' ? doneTag(c) : c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>
           </article>`).join('') || '<div class="col-empty">Drop a candidate here</div>'}</div></section>${ci < cols.length - 1 ? `<div class="col-rs" data-rs="${s.id}" role="separator" aria-orientation="vertical" aria-label="Resize ${esc(s.name)}" tabindex="0" title="Drag to widen or narrow ${esc(s.name)} · double-click to reset"><span class="col-grip"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4 1 8l4 4M11 4l4 4-4 4"/></svg></span></div>` : ''}`; }).join('');
       // Resize: drag the ⇔ handle to the right of a column (arrow keys work too); double-click resets it
       $$('[data-rs]').forEach(h => { const id = +h.dataset.rs, col = h.previousElementSibling;
@@ -936,20 +941,49 @@
       ${['admin', 'recruiter'].includes(state.me.role) ? `<button class="btn sm" id="rescr">${icon('refresh', 15)}Rescreen</button>` : ''}
       ${a.stage_id !== 7 ? `<button class="btn danger sm" id="rej">Reject</button>` : ''}`;
   }
-  /* Salary answers: read "1200000 PKR" (or older free text like "165k PKR") and show it in USD at today's rate */
-  const CUR_SYM = { '$': 'USD', '₹': 'INR', '€': 'EUR', '£': 'GBP', 'rs': 'INR', 'rs.': 'INR' };
-  const MULT = { k: 1e3, thousand: 1e3, l: 1e5, lac: 1e5, lakh: 1e5, lakhs: 1e5, lacs: 1e5, m: 1e6, mn: 1e6, million: 1e6, cr: 1e7, crore: 1e7, crores: 1e7 };
-  function moneyOf(q) {
-    const v = String(q?.value || '').trim(); if (!v || v.length > 60) return null;
+  /* Salary answers: read "1200000 INR / year", "165k PKR" or "65000" and show a monthly USD figure at today's rate */
+  const CUR_SYM = { '$': 'USD', '₹': 'INR', '€': 'EUR', '£': 'GBP' };
+  const MULT = { k: 1e3, thousand: 1e3, l: 1e5, lac: 1e5, lacs: 1e5, lakh: 1e5, lakhs: 1e5, lpa: 1e5, m: 1e6, mn: 1e6, million: 1e6, cr: 1e7, crore: 1e7, crores: 1e7 };
+  // Phone country code -> usual currency, for answers typed without one
+  const DIAL_CUR = [['971', 'AED'], ['880', 'BDT'], ['977', 'NPR'], ['966', 'SAR'], ['974', 'QAR'], ['965', 'KWD'], ['973', 'BHD'], ['968', 'OMR'], ['234', 'NGN'], ['254', 'KES'],
+    ['91', 'INR'], ['92', 'PKR'], ['94', 'LKR'], ['44', 'GBP'], ['63', 'PHP'], ['65', 'SGD'], ['60', 'MYR'], ['62', 'IDR'], ['66', 'THB'], ['84', 'VND'], ['20', 'EGP'], ['27', 'ZAR'], ['61', 'AUD'], ['1', 'USD']];
+  const curFromPhone = ph => { const d = String(ph || '').replace(/[^\d+]/g, ''); if (!d.startsWith('+')) return null; const x = DIAL_CUR.find(([c]) => d.startsWith('+' + c)); return x ? x[1] : null; };
+  function moneyOf(q, cand) {
+    let v = String(q?.value || '').trim(); if (!v || v.length > 80) return null;
     if (q.type !== 'money' && !/ctc|salary|compensation|pay|package|income/i.test(q.label || '')) return null;
-    const m = v.match(/^([A-Za-z]{3}|[$₹€£]|rs\.?)?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|l|lacs?|lakhs?|m|mn|million|thousand|cr|crores?)?\.?\s*([A-Za-z]{3}|[$₹€£])?(?:\s*(?:\/|per|a)\s*(\w+))?\s*$/i);
+    let per = null;                                                        // 'month' | 'year' when the answer says so
+    if (/\b(per\s*month|monthly|p\.?\s?m\.?|a month)\b|\/\s*(month|mo|m)\b/i.test(v)) per = 'month';
+    if (/\b(per\s*(annum|year)|annual(ly)?|yearly|p\.?\s?a\.?|lpa|a year)\b|\/\s*(year|yr|y|annum)\b/i.test(v)) per = 'year';
+    v = v.replace(/,?\s*(negotiable|approx\.?|around|about)\b.*$/i, '').replace(/\b(per\s*(month|annum|year)|monthly|annual(ly)?|yearly|a month|a year)\b/ig, '').replace(/\/\s*\w+\s*$/, '').trim();
+    let cur = null;
+    if (/\brs\.?\s*pk|\bpk\s*rs|pkr|pak(istani)?\s*rupees?/i.test(v)) cur = 'PKR';
+    else if (/\binr\b|indian\s*rupees?|₹/i.test(v)) cur = 'INR';
+    v = v.replace(/\brs\.?\s*pk\b|\bpk\s*rs\b|pak(istani)?\s*rupees?|indian\s*rupees?|\brupees?\b|\brs\.?/ig, ' ').trim();
+    const m = v.match(/^([A-Za-z]{3}|[$₹€£])?\s*([\d][\d,]*(?:\.\d+)?)\s*(k|l|lacs?|lakhs?|lpa|m|mn|million|thousand|cr|crores?)?\.?\s*([A-Za-z]{3}|[$₹€£])?\s*$/i);
     if (!m) return null;
-    const code = x => !x ? null : CUR_SYM[x.toLowerCase()] || (/^[A-Za-z]{3}$/.test(x) ? x.toUpperCase() : null);
-    const cur = code(m[4]) || code(m[1]); if (!cur || !/^[A-Z]{3}$/.test(cur)) return null;
-    const amount = parseFloat(m[2].replace(/,/g, '')) * (MULT[(m[3] || '').toLowerCase()] || 1);
-    return amount > 0 ? { amount, cur, per: m[5] ? ' / ' + m[5].toLowerCase() : '' } : null;
+    const code = x => !x ? null : CUR_SYM[x] || (/^[A-Za-z]{3}$/.test(x) && !/^(lpa|lac|cr)$/i.test(x) ? x.toUpperCase() : null);
+    const unit = (m[3] || '').toLowerCase();
+    let assumedCur = false;
+    cur = cur || code(m[4]) || code(m[1]);
+    if (!cur && /^(l|lacs?|lakhs?|lpa|cr|crores?)$/.test(unit)) cur = 'INR';      // lakh / crore are Indian units
+    if (!cur) { cur = curFromPhone(cand?.phone); assumedCur = !!cur; }
+    if (!cur) return null;
+    if (unit === 'lpa') per = 'year';
+    const amount = parseFloat(m[2].replace(/,/g, '')) * (MULT[unit] || 1);
+    if (!(amount >= 100)) return null;                                     // "0", "1": not a real figure
+    if (!per && /annual|yearly|per annum/i.test(q.label || '')) per = 'year';
+    if (!per && /monthly|per month/i.test(q.label || '')) per = 'month';
+    return { amount, cur, per, assumedCur };
   }
   const fmtMoney = (n, cur) => `${Math.round(n).toLocaleString('en-US')} ${cur}`;
+  // Monthly USD: use the period given; otherwise judge by size (over $6,000 is a yearly figure, under $2,400 a monthly one)
+  // and, in between, Indian rupee CTC is yearly by convention, other currencies monthly
+  function monthlyUsd(amount, cur, per, rates) {
+    const r = cur === 'USD' ? 1 : rates?.[cur]; if (!r) return null;
+    const usd = amount / r; let p = per, assumed = false;
+    if (!p) { assumed = true; p = usd > 6000 ? 'year' : usd < 2400 ? 'month' : cur === 'INR' ? 'year' : 'month'; }
+    return { month: p === 'year' ? usd / 12 : usd, year: p === 'year' ? usd : usd * 12, per: p, assumed, rate: r };
+  }
   // Exchange rates (US dollar base) from open.er-api.com, refreshed once a day and kept in this browser
   let fxP = null;
   function fxRates() {
@@ -963,14 +997,16 @@
       return c; }).catch(e => { fxP = null; throw e; });
     return fxP;
   }
+  const usd0 = n => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   function fillFx(root) {
     const els = $$('[data-fx-amt]', root); if (!els.length) return;
-    fxRates().then(fx => els.forEach(el => { const r = fx.rates[el.dataset.fxCur];
-      if (!r) { el.textContent = ''; return; }
-      const usd = +el.dataset.fxAmt / r;
-      el.innerHTML = `<b class="fx-usd">≈ ${usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</b> <span class="small muted">at 1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur}</span>`;
-      el.title = `1 USD = ${r.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${el.dataset.fxCur} · rate of ${new Date(fx.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }))
-      .catch(() => els.forEach(el => { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); }));
+    const paint = rates => els.forEach(el => { const x = monthlyUsd(+el.dataset.fxAmt, el.dataset.fxCur, el.dataset.fxPer || null, rates);
+      if (!x) { el.textContent = ''; return; }
+      el.innerHTML = `<b class="fx-usd">≈ ${usd0(x.month)} / month</b>${x.assumed && x.per === 'year' ? ' <span class="small muted">(read as a yearly figure)</span>' : ''}`;
+      el.title = `${usd0(x.year)} a year`; });
+    const allUsd = els.every(el => el.dataset.fxCur === 'USD');
+    if (allUsd) return paint({});
+    fxRates().then(fx => paint(fx.rates)).catch(() => els.forEach(el => { if (el.dataset.fxCur === 'USD') paint({}); else { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); } }));
   }
   function candidateBody(a, iscores, canAct, mode) {
     const c = a.candidates || {}; const sc = a.screening; const failed = failedMailsOf(a);
@@ -989,9 +1025,9 @@
             <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
         : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
       ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
-        ${(a.form_answers || []).map(q => { const m = moneyOf(q);
+        ${(a.form_answers || []).map(q => { const m = moneyOf(q, c);
           return `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>`
-            : m ? `${esc(fmtMoney(m.amount, m.cur) + m.per)}${m.cur !== 'USD' ? ` <span class="fx" data-fx-amt="${m.amount}" data-fx-cur="${m.cur}"></span>` : ''}` : esc(q.value)}</div></div>`; }).join('')}
+            : m ? `<span title="Answer: ${esc(q.value)}">${esc(fmtMoney(m.amount, m.cur) + (m.per ? ' / ' + m.per : ''))}</span>${m.assumedCur ? ` <span class="small muted">(${m.cur} assumed from phone)</span>` : ''} <span class="fx" data-fx-amt="${m.amount}" data-fx-cur="${m.cur}" data-fx-per="${m.per || ''}"></span>` : esc(q.value)}</div></div>`; }).join('')}
         ${(a.attachments || []).map((f, k) => `<div><div class="small muted">${esc(f.label)}</div><button class="btn sm" data-att="${k}">${icon('file', 14)}${esc(f.name || 'Open file')}</button></div>`).join('')}</div></div>` : ''}
       ${c.full_name || c.profile_summary ? `<div class="card"><div class="card-h"><h3>Profile</h3><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' years experience' : ''}${c.location ? ' · ' + esc(c.location) : ''}</span></div><div class="card-b" style="display:grid;gap:12px">
         ${c.profile_summary ? `<p class="prose">${esc(c.profile_summary)}</p>` : ''}
@@ -1001,6 +1037,7 @@
         ${(c.education || []).map(e => `<div class="small"><b>${esc(e.degree)}</b> · ${esc(e.institution)} ${esc(e.year || '')}</div>`).join('')}</div></div>` : ''}
       ${a.interviews?.length ? `<div class="card"><div class="card-h"><h3>Interviews</h3></div><div class="list">${a.interviews.map(i => `<div class="li" style="cursor:default"><div class="grow"><b>${stageName(i.stage_id)} · ${fmtDate(i.scheduled_at)} ${fmtTime(i.scheduled_at)}</b>
         <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}</div>
+        <div class="iv-rec" data-recbox="${i.id}">${i.recording_url ? `<a class="btn sm" href="${esc(i.recording_url)}" target="_blank" rel="noopener">${icon('file', 14)}Recording ↗</a>` : ''}${canAct && i.status !== 'cancelled' ? `<button class="btn sm ghost" data-rec="${i.id}">${i.recording_url ? 'Change' : '+ Recording link'}</button>` : ''}</div></div>
         ${i.status === 'scheduled' ? `<button class="btn sm" data-score="${i.id}">Scorecard</button>` : ''}</div>`).join('')}</div></div>` : ''}
       <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
           ...a.emails.map(m => ({ t: m.sent_at, txt: `${m.status === 'failed' ? 'Email NOT sent' : 'Email sent'}: ${mailName(m.template_key)}${m.template_key === 'interviewer_notice' && m.to_email ? ' (' + m.to_email + ')' : ''}` }))].sort((p, q) => q.t.localeCompare(p.t))
@@ -1032,6 +1069,16 @@
     const rsm = $('#resume', root); if (rsm) rsm.onclick = () => { if (!a.resumes?.storage_path) return toast('No resume file for this candidate.', true); viewFile({ path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }); };
     const rsc = $('#rescr', root); if (rsc) rsc.onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } };
     const rj = $('#rej', root); if (rj) rj.onclick = () => rejectFlow(id, again);
+    // Interview recording link (paste a Google Drive / Meet recording link; an automation can fill it later)
+    $$('[data-rec]', root).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.rec);
+      const m = modal('Interview recording', `<div class="field"><label for="rcu">Recording link</label><input class="input" id="rcu" type="url" placeholder="https://drive.google.com/…" value="${esc(iv.recording_url || '')}">
+        <div class="small muted">Paste the link to the recording (for example the Google Meet recording in Google Drive). Only people with access to that file can open it.</div></div>`,
+        `${iv.recording_url ? '<button class="btn ghost" id="rcx">Remove</button>' : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="rcs">Save</button>`);
+      const save = async url => { if (url && !/^https?:\/\/\S+\.\S+/i.test(url)) return toast('Paste a full link starting with https://', true);
+        try { await api.setRecording(iv.id, url); m.close(); toast(url ? 'Recording link saved' : 'Recording link removed'); render(); } catch (e) { fail(e); } };
+      $('#rcs', m.el).onclick = () => save($('#rcu', m.el).value.trim());
+      const x = $('#rcx', m.el); if (x) x.onclick = () => save('');
+      $('#rcu', m.el).onkeydown = e => { if (e.key === 'Enter') save(e.target.value.trim()); }; });
     $$('[data-score]', root).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.score);
       scoringCfg(a.jobs).criteria.length ? hooks.score({ interview: iv }) : scorecardFlow(b.dataset.score, render); });
     const isc = $('#iscore', root); if (isc) isc.onclick = () => hooks.score({});
@@ -2089,6 +2136,7 @@
           <div><dt>${icon('cal', 14)}Hours</dt><dd>${esc(hours(t))}</dd></div>
           <div><dt>${icon('dash', 14)}Time zone</dt><dd>${esc(t.timezone || 'Asia/Kolkata')}</dd></div>
           <div><dt>${icon('people', 14)}Meeting link</dt><dd>${t.meeting_link ? `<a href="${esc(t.meeting_link)}" target="_blank" rel="noopener">Open ↗</a>` : '<span style="color:var(--review)">Missing</span>'}${t.booking_url ? ' · <span class="muted">own booking page</span>' : ''}</dd></div>
+          <div><dt>${icon('mail', 14)}"Moved" emails</dt><dd>${t.round_alerts === false ? '<span class="muted">Off · only when an interview is booked</span>' : 'On'}</dd></div>
         </dl>
         <div class="pm-foot">${cal}<span class="grow"></span><button class="btn sm" data-em="${t.id}">Edit</button>
           ${CFG.CALCOM_CONNECT_URL ? `<button class="btn sm ${calOn(t) ? '' : 'primary'}" data-cal="${t.id}">${calOn(t) ? 'Cal.com' : 'Connect Cal.com'}</button>` : ''}</div></article>`; };
@@ -2100,6 +2148,7 @@
       sb.innerHTML = `<div class="card pm-top"><div class="card-h"><div><h3>Interview panel</h3><div class="small muted">People who interview candidates. They don't need a login: candidates book a time from their weekly hours, and invites use their meeting link.</div></div>
           <button class="btn primary sm" id="addm">${icon('plus', 14)}Add person</button></div>
         <div class="card-b" style="display:grid;gap:14px">
+          ${CFG.CALCOM_MEET_URL && state.me?.role === 'admin' && n.cal ? `<div class="pm-meet"><div class="grow"><b>Google Meet for every Cal.com interview</b><span class="small muted" style="display:block">Sets Google Meet as the default meeting app in each connected interviewer's Cal.com and switches the ATS booking links to Google Meet. Safe to run again after adding people or links.</span></div><button class="btn sm" id="calmeet">${icon('cal', 14)}Switch to Google Meet</button></div><div id="calmeetres"></div>` : ''}
           <div class="pm-stats"><span><b>${n.all}</b> people</span><span><b>${n.cal}</b> on Cal.com</span><span class="${n.nolink ? 'warn' : ''}"><b>${n.nolink}</b> missing a meeting link</span>${n.ext ? `<span><b>${n.ext}</b> outside DRG</span>` : ''}</div>
           <div class="pm-tools">
             <div class="pick-box grow"><span class="pm-search-ic">${icon('search', 16)}</span><input class="input" id="pmq" placeholder="Find a person by name or email…" autocomplete="off" value="${esc(q)}" role="combobox" aria-expanded="${open}" aria-controls="pml">
@@ -2109,6 +2158,13 @@
           </div></div></div>
         <div class="pm-grid">${list.map(card).join('') || `<div class="card empty" style="grid-column:1/-1">${team.length ? 'No one matches this filter.' : 'No one yet. Add the people who run interviews.'}</div>`}</div>`;
       $('#addm', sb).onclick = () => memberForm(null, () => panelSettings(sb));
+      const cm = $('#calmeet', sb); if (cm) cm.onclick = async () => { cm.disabled = true; cm.textContent = 'Updating Cal.com…';
+        try { const r = await api.setCalGoogleMeet(); const rows = r.results || [];
+          $('#calmeetres', sb).innerHTML = `<div class="card card-b pm-meet-res">${rows.map(x => { const bad = !x.default_ok || x.failed.length;
+            return `<div class="row" style="gap:8px;align-items:flex-start"><span class="pill ${bad ? 'warn' : 'ok'} sm">${bad ? 'Check' : 'Done'}</span><span class="grow"><b>${esc(x.name)}</b> · ${x.default_ok ? 'Google Meet is now the default' : 'default not changed'}${x.updated ? ` · ${x.updated} booking link${x.updated > 1 ? 's' : ''} switched` : ''}${x.failed.length ? ` · ${x.failed.length} link${x.failed.length > 1 ? 's' : ''} not switched` : ''}
+              ${bad ? `<span class="small muted" style="display:block">${/not installed|credential|install|google/i.test(String(x.default_error || x.failed[0]?.error || '')) ? 'Google Meet isn\'t installed in their Cal.com. In Cal.com go to Apps → Google Meet → Install (it needs Google Calendar connected), then run this again.' : esc(String(x.default_error || x.failed[0]?.error || ''))}</span>` : ''}</span></div>`; }).join('') || '<span class="small muted">No one is connected to Cal.com yet.</span>'}</div>`;
+          toast(rows.every(x => x.default_ok && !x.failed.length) ? 'Cal.com now uses Google Meet for everyone' : 'Cal.com updated, but some people need a fix (see below)', !rows.every(x => x.default_ok && !x.failed.length));
+        } catch (e) { fail(e); } finally { cm.disabled = false; cm.innerHTML = `${icon('cal', 14)}Switch to Google Meet`; } };
       $$('[data-em]', sb).forEach(b => b.onclick = () => memberForm(team.find(t => t.id === b.dataset.em), () => panelSettings(sb)));
       $$('[data-cal]', sb).forEach(b => b.onclick = () => calConnectForm(team.find(t => t.id === b.dataset.cal), () => panelSettings(sb)));
       $('#pmf', sb).onchange = e => { filter = e.target.value; focusId = null; draw(); };
@@ -2185,6 +2241,7 @@
       <div class="field"><label for="ms">Offer start times every</label><select class="input" id="ms">${[15, 30, 60].map(x => `<option value="${x}" ${+av.slot === x ? 'selected' : ''}>${x} minutes</option>`).join('')}</select></div>
       <div class="field"><label for="ml">Meeting link (Google Meet, Zoom, Teams)</label><input class="input" id="ml" value="${esc(t?.meeting_link)}" placeholder="Their personal meeting room link"></div>
       <div class="field"><label for="mb">Own booking page (optional)</label><input class="input" id="mb" value="${esc(t?.booking_url)}" placeholder="e.g. a Calendly link. If set, candidates book there instead."></div>
+      <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" id="mra" ${t?.round_alerts !== false ? 'checked' : ''} style="margin-top:2px"><span>Email them when a candidate is moved into their round, before the candidate books<span class="muted" style="display:block">They always get an email with the calendar invite once an interview is booked with them. Job coordinators get the "moved" email either way.</span></span></label>
       ${t ? `<label class="row small" style="gap:8px"><input type="checkbox" id="ma" ${t.active !== false ? 'checked' : ''}> Active (can be chosen for interviews)</label>` : ''}`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">${t ? 'Save' : 'Add person'}</button>`);
     $$('[data-d]', m.el).forEach(b => b.onclick = () => b.classList.toggle('on'));
@@ -2199,7 +2256,7 @@
       if ([link, book].some(u => u && !/^https:\/\//i.test(u))) return toast('Links must start with https://', true);
       const company = $('#mco', m.el).value.trim() || companyFromEmail(email);
       try { await api.saveMember({ ...(t ? { id: t.id } : {}), full_name: name, email, company, title: $('#mt', m.el).value.trim() || null, timezone: $('#mz', m.el).value,
-          availability: { slot: +$('#ms', m.el).value, days }, meeting_link: link || null, booking_url: book || null, ...(t ? { active: $('#ma', m.el).checked } : {}) });
+          availability: { slot: +$('#ms', m.el).value, days }, meeting_link: link || null, booking_url: book || null, round_alerts: $('#mra', m.el).checked, ...(t ? { active: $('#ma', m.el).checked } : {}) });
         if ($('#msnd', m.el).checked) { try { await api.saveSender({ from_name: company ? `${name.split(' ')[0]} · ${company}` : name, from_email: email, active: true }); toast(`${email} added as an email sender`); }
           catch (er) { toast(/duplicate|unique/i.test(er.message) ? `${email} is already an email sender` : 'Saved, but the sender could not be added: ' + er.message, true); } }
         m.close(); toast(t ? 'Saved' : 'Added to the interview panel'); after?.(); } catch (e) { fail(/duplicate/i.test(e.message) ? new Error('Someone with this email is already on the panel.') : e); } };
