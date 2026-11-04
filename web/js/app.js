@@ -1037,6 +1037,7 @@
         ${(c.education || []).map(e => `<div class="small"><b>${esc(e.degree)}</b> · ${esc(e.institution)} ${esc(e.year || '')}</div>`).join('')}</div></div>` : ''}
       ${a.interviews?.length ? `<div class="card"><div class="card-h"><h3>Interviews</h3></div><div class="list">${a.interviews.map(i => `<div class="li" style="cursor:default"><div class="grow"><b>${stageName(i.stage_id)} · ${fmtDate(i.scheduled_at)} ${fmtTime(i.scheduled_at)}</b>
         <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}</div>
+        <div class="iv-rec" data-recbox="${i.id}">${i.recording_url ? `<a class="btn sm" href="${esc(i.recording_url)}" target="_blank" rel="noopener">${icon('file', 14)}Recording ↗</a>` : ''}${canAct && i.status !== 'cancelled' ? `<button class="btn sm ghost" data-rec="${i.id}">${i.recording_url ? 'Change' : '+ Recording link'}</button>` : ''}</div></div>
         ${i.status === 'scheduled' ? `<button class="btn sm" data-score="${i.id}">Scorecard</button>` : ''}</div>`).join('')}</div></div>` : ''}
       <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
           ...a.emails.map(m => ({ t: m.sent_at, txt: `${m.status === 'failed' ? 'Email NOT sent' : 'Email sent'}: ${mailName(m.template_key)}${m.template_key === 'interviewer_notice' && m.to_email ? ' (' + m.to_email + ')' : ''}` }))].sort((p, q) => q.t.localeCompare(p.t))
@@ -1068,6 +1069,16 @@
     const rsm = $('#resume', root); if (rsm) rsm.onclick = () => { if (!a.resumes?.storage_path) return toast('No resume file for this candidate.', true); viewFile({ path: a.resumes.storage_path, name: a.resumes.file_name, resumeId: a.resumes.id }); };
     const rsc = $('#rescr', root); if (rsc) rsc.onclick = async () => { try { await api.rescreen(id); toast('Sent for rescreening'); render(); } catch (e) { fail(e); } };
     const rj = $('#rej', root); if (rj) rj.onclick = () => rejectFlow(id, again);
+    // Interview recording link (paste a Google Drive / Meet recording link; an automation can fill it later)
+    $$('[data-rec]', root).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.rec);
+      const m = modal('Interview recording', `<div class="field"><label for="rcu">Recording link</label><input class="input" id="rcu" type="url" placeholder="https://drive.google.com/…" value="${esc(iv.recording_url || '')}">
+        <div class="small muted">Paste the link to the recording (for example the Google Meet recording in Google Drive). Only people with access to that file can open it.</div></div>`,
+        `${iv.recording_url ? '<button class="btn ghost" id="rcx">Remove</button>' : ''}<button class="btn" data-close>Cancel</button><button class="btn primary" id="rcs">Save</button>`);
+      const save = async url => { if (url && !/^https?:\/\/\S+\.\S+/i.test(url)) return toast('Paste a full link starting with https://', true);
+        try { await api.setRecording(iv.id, url); m.close(); toast(url ? 'Recording link saved' : 'Recording link removed'); render(); } catch (e) { fail(e); } };
+      $('#rcs', m.el).onclick = () => save($('#rcu', m.el).value.trim());
+      const x = $('#rcx', m.el); if (x) x.onclick = () => save('');
+      $('#rcu', m.el).onkeydown = e => { if (e.key === 'Enter') save(e.target.value.trim()); }; });
     $$('[data-score]', root).forEach(b => b.onclick = () => { const iv = a.interviews.find(i => i.id === b.dataset.score);
       scoringCfg(a.jobs).criteria.length ? hooks.score({ interview: iv }) : scorecardFlow(b.dataset.score, render); });
     const isc = $('#iscore', root); if (isc) isc.onclick = () => hooks.score({});
@@ -2136,6 +2147,7 @@
       sb.innerHTML = `<div class="card pm-top"><div class="card-h"><div><h3>Interview panel</h3><div class="small muted">People who interview candidates. They don't need a login: candidates book a time from their weekly hours, and invites use their meeting link.</div></div>
           <button class="btn primary sm" id="addm">${icon('plus', 14)}Add person</button></div>
         <div class="card-b" style="display:grid;gap:14px">
+          ${CFG.CALCOM_MEET_URL && state.me?.role === 'admin' && n.cal ? `<div class="pm-meet"><div class="grow"><b>Google Meet for every Cal.com interview</b><span class="small muted" style="display:block">Sets Google Meet as the default meeting app in each connected interviewer's Cal.com and switches the ATS booking links to Google Meet. Safe to run again after adding people or links.</span></div><button class="btn sm" id="calmeet">${icon('cal', 14)}Switch to Google Meet</button></div><div id="calmeetres"></div>` : ''}
           <div class="pm-stats"><span><b>${n.all}</b> people</span><span><b>${n.cal}</b> on Cal.com</span><span class="${n.nolink ? 'warn' : ''}"><b>${n.nolink}</b> missing a meeting link</span>${n.ext ? `<span><b>${n.ext}</b> outside DRG</span>` : ''}</div>
           <div class="pm-tools">
             <div class="pick-box grow"><span class="pm-search-ic">${icon('search', 16)}</span><input class="input" id="pmq" placeholder="Find a person by name or email…" autocomplete="off" value="${esc(q)}" role="combobox" aria-expanded="${open}" aria-controls="pml">
@@ -2145,6 +2157,13 @@
           </div></div></div>
         <div class="pm-grid">${list.map(card).join('') || `<div class="card empty" style="grid-column:1/-1">${team.length ? 'No one matches this filter.' : 'No one yet. Add the people who run interviews.'}</div>`}</div>`;
       $('#addm', sb).onclick = () => memberForm(null, () => panelSettings(sb));
+      const cm = $('#calmeet', sb); if (cm) cm.onclick = async () => { cm.disabled = true; cm.textContent = 'Updating Cal.com…';
+        try { const r = await api.setCalGoogleMeet(); const rows = r.results || [];
+          $('#calmeetres', sb).innerHTML = `<div class="card card-b pm-meet-res">${rows.map(x => { const bad = !x.default_ok || x.failed.length;
+            return `<div class="row" style="gap:8px;align-items:flex-start"><span class="pill ${bad ? 'warn' : 'ok'} sm">${bad ? 'Check' : 'Done'}</span><span class="grow"><b>${esc(x.name)}</b> · ${x.default_ok ? 'Google Meet is now the default' : 'default not changed'}${x.updated ? ` · ${x.updated} booking link${x.updated > 1 ? 's' : ''} switched` : ''}${x.failed.length ? ` · ${x.failed.length} link${x.failed.length > 1 ? 's' : ''} not switched` : ''}
+              ${bad ? `<span class="small muted" style="display:block">${/not installed|credential|install|google/i.test(String(x.default_error || x.failed[0]?.error || '')) ? 'Google Meet isn\'t installed in their Cal.com. In Cal.com go to Apps → Google Meet → Install (it needs Google Calendar connected), then run this again.' : esc(String(x.default_error || x.failed[0]?.error || ''))}</span>` : ''}</span></div>`; }).join('') || '<span class="small muted">No one is connected to Cal.com yet.</span>'}</div>`;
+          toast(rows.every(x => x.default_ok && !x.failed.length) ? 'Cal.com now uses Google Meet for everyone' : 'Cal.com updated, but some people need a fix (see below)', !rows.every(x => x.default_ok && !x.failed.length));
+        } catch (e) { fail(e); } finally { cm.disabled = false; cm.innerHTML = `${icon('cal', 14)}Switch to Google Meet`; } };
       $$('[data-em]', sb).forEach(b => b.onclick = () => memberForm(team.find(t => t.id === b.dataset.em), () => panelSettings(sb)));
       $$('[data-cal]', sb).forEach(b => b.onclick = () => calConnectForm(team.find(t => t.id === b.dataset.cal), () => panelSettings(sb)));
       $('#pmf', sb).onchange = e => { filter = e.target.value; focusId = null; draw(); };

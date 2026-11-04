@@ -856,3 +856,10 @@ body.col-resizing{cursor:col-resize;user-select:none}
 .done-tag b{display:block;font-size:12px;white-space:normal}
 .done-tag span{color:var(--ink-2)}
 .done-tag span b{color:var(--done)}
+
+/* Interview recording + Cal.com Google Meet */
+.iv-rec{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.iv-rec:empty{display:none}
+.pm-meet{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.pm-meet-res{display:grid;gap:10px}
+.pill.warn{background:var(--review-soft,rgba(245,165,36,.15));color:var(--review);border-color:transparent}

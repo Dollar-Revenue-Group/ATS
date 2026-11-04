@@ -77,6 +77,12 @@
         return res;
       },
       async deleteQuestions(id) { ok(await sb.from('interview_questions').delete().eq('id', id)); },
+      async setCalGoogleMeet() {
+        const res = await callN8n(cfg.CALCOM_MEET_URL, {});
+        if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not update Cal.com.');
+        return res;
+      },
+      async setRecording(interviewId, url) { ok(await sb.from('interviews').update({ recording_url: url || null }).eq('id', interviewId)); },
       async disconnectCal(memberId) {
         const res = await callN8n(cfg.CALCOM_CONNECT_URL, { member_id: memberId, action: 'disconnect' });
         if (!res || res.ok === false) throw new Error((res && res.message) || 'Could not disconnect Cal.com.');
@@ -460,6 +466,8 @@
         qsets.push(set); return { ok: true, message: items.length + ' questions ready', set }; },
       async deleteQuestions(qid) { const i = qsets.findIndex(x => x.id === qid); if (i >= 0) qsets.splice(i, 1); },
       async connectCal(mid, key) { const t = team.find(x => x.id === mid); Object.assign(t, { cal_key_id: 'demo', cal_username: 'demo-' + t.full_name.split(' ')[0].toLowerCase(), cal_account: t.cal_account || 'demo', cal_connected_at: iso(Date.now()) }); return { ok: true, message: 'Connected (demo)', webhook: true }; },
+      async setCalGoogleMeet() { return { ok: true, results: team.filter(t => t.cal_account).map(t => ({ name: t.full_name, default_ok: true, updated: 2, failed: [] })) }; },
+      async setRecording(ivid, url) { Object.assign(interviews.find(i => i.id === ivid), { recording_url: url || null }); emit(); },
       async disconnectCal(mid) { Object.assign(team.find(x => x.id === mid), { cal_key_id: null, cal_account: null, cal_connected_at: null }); return { ok: true, message: 'Disconnected (demo)' }; },
       async createCalLink(jobId, round) { await new Promise(r => setTimeout(r, 400)); return { ok: true, booking_url: `https://cal.com/demo/drg-${jobId}-r${round}-interview`, event_type_id: 1, account: 'demo', message: 'Demo link' }; },
       async saveMember(m) { if (m.id) { Object.assign(team.find(t => t.id === m.id), m); return m; } const t = { id: id('tm'), active: true, ...m }; team.push(t); return t; },
