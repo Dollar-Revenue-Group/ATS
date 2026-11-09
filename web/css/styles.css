@@ -623,8 +623,10 @@ body.cp-mode .page{max-width:none;padding:18px 20px}
 @media (max-width:860px){.cp-head{grid-template-columns:1fr}}
 /* Narrow windows (e.g. a side panel): keep the scoring panel on the right; only phones stack everything in one column */
 @media (max-width:860px) and (min-width:601px){.cp-grid,.cp-grid.no-res{grid-template-columns:minmax(0,1fr) minmax(270px,320px)}.cp-grid.no-sc,.cp-grid.no-res.no-sc{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:600px){.cp-grid,.cp-grid.no-sc,.cp-grid.no-res,.cp-grid.no-res.no-sc{grid-template-columns:1fr}
-  .cp-pane{position:relative;top:0;height:auto;max-height:none}.cp-resume{height:70vh!important}}
+/* Phones: scoring still sits on the right; the details and scoring columns scroll sideways together */
+@media (max-width:600px){.cp-grid,.cp-grid.no-res{grid-template-columns:minmax(300px,1fr) minmax(280px,300px);overflow-x:auto;padding-bottom:6px}
+  .cp-grid.no-sc,.cp-grid.no-res.no-sc{grid-template-columns:minmax(0,1fr)}
+  .cp-resume{height:70vh!important;position:sticky;left:0}}
 .sp .grow,.cp-actions .grow{flex:1}
 
 /* ── look & feel options (picked with "Try a style" on staging) ── */
