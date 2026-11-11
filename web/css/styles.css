@@ -618,10 +618,15 @@ body.cp-mode .page{max-width:none;padding:18px 20px}
 .sp-card{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.sp-card.on{border-color:var(--accent)}
 .sp-card .linkbtn{justify-self:start}
 .sp-empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:30px 16px;color:var(--ink-2)}.sp-empty p{margin:0}
-@media (max-width:1250px){.cp-grid,.cp-grid.no-sc,.cp-grid.no-res{grid-template-columns:minmax(0,1fr) minmax(320px,380px)}
+@media (max-width:1250px){.cp-grid,.cp-grid.no-res{grid-template-columns:minmax(0,1fr) minmax(300px,380px)}.cp-grid.no-sc{grid-template-columns:minmax(0,1fr)}
   .cp-grid .cp-resume{grid-column:1/-1;position:relative;top:0;height:70vh}}
-@media (max-width:860px){.cp-head{grid-template-columns:1fr}.cp-grid,.cp-grid.no-sc,.cp-grid.no-res,.cp-grid.no-res.no-sc{grid-template-columns:1fr}
-  .cp-pane{position:relative;top:0;height:auto;max-height:none}.cp-resume{height:70vh!important}}
+@media (max-width:860px){.cp-head{grid-template-columns:1fr}}
+/* Narrow windows (e.g. a side panel): keep the scoring panel on the right; only phones stack everything in one column */
+@media (max-width:860px) and (min-width:601px){.cp-grid,.cp-grid.no-res{grid-template-columns:minmax(0,1fr) minmax(270px,320px)}.cp-grid.no-sc,.cp-grid.no-res.no-sc{grid-template-columns:minmax(0,1fr)}}
+/* Phones: scoring still sits on the right; the details and scoring columns scroll sideways together */
+@media (max-width:600px){.cp-grid,.cp-grid.no-res{grid-template-columns:minmax(300px,1fr) minmax(280px,300px);overflow-x:auto;padding-bottom:6px}
+  .cp-grid.no-sc,.cp-grid.no-res.no-sc{grid-template-columns:minmax(0,1fr)}
+  .cp-resume{height:70vh!important;position:sticky;left:0}}
 .sp .grow,.cp-actions .grow{flex:1}
 
 /* ── look & feel options (picked with "Try a style" on staging) ── */
@@ -863,3 +868,14 @@ body.col-resizing{cursor:col-resize;user-select:none}
 .pm-meet{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
 .pm-meet-res{display:grid;gap:10px}
 .pill.warn{background:var(--review-soft,rgba(245,165,36,.15));color:var(--review);border-color:transparent}
+
+/* Interviewer recommendation on pipeline cards */
+:root{--rec-yes:#16A34A;--rec-hold:#EA8A0C;--rec-no:#DC2626}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--rec-yes:#34D058;--rec-hold:#F5A524;--rec-no:#F06262}}
+:root[data-theme="dark"]{--rec-yes:#34D058;--rec-hold:#F5A524;--rec-no:#F06262}
+.kcard.rec-yes,.kcard.rec-hold,.kcard.rec-no{--rc:var(--rec-yes);border-color:var(--rc);box-shadow:inset 4px 0 0 var(--rc);background:linear-gradient(0deg,color-mix(in srgb,var(--rc) 9%,transparent),color-mix(in srgb,var(--rc) 9%,transparent)),var(--surface)}
+.kcard.rec-hold{--rc:var(--rec-hold)}.kcard.rec-no{--rc:var(--rec-no)}
+.board .kcard.rec-yes:hover,.board .kcard.rec-hold:hover,.board .kcard.rec-no:hover{border-color:var(--rc)}
+.rec-tag{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;color:var(--rc);background:color-mix(in srgb,var(--rc) 15%,transparent);--rc:var(--rec-yes)}
+.rec-tag.rec-hold{--rc:var(--rec-hold)}.rec-tag.rec-no{--rc:var(--rec-no)}
+.legend-rec{font-weight:600}
