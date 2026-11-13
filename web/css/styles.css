@@ -879,3 +879,4 @@ body.col-resizing{cursor:col-resize;user-select:none}
 .rec-tag{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;color:var(--rc);background:color-mix(in srgb,var(--rc) 15%,transparent);--rc:var(--rec-yes)}
 .rec-tag.rec-hold{--rc:var(--rec-hold)}.rec-tag.rec-no{--rc:var(--rec-no)}
 .legend-rec{font-weight:600}
+.timeline .tl>div>div:first-child{white-space:pre-wrap}

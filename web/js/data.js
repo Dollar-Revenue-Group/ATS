@@ -145,6 +145,10 @@
         const status = stageId === 7 ? 'rejected' : stageId === 6 ? 'hired' : 'active';
         ok(await sb.from('applications').update({ stage_id: stageId, status, rejection_reason: reason || null }).eq('id', appId));
       },
+      async addRoundNote(appId, fromStage, toStage, note) {
+        const { data, error } = await sb.rpc('ats_add_round_note', { p_application_id: appId, p_from_stage: fromStage, p_to_stage: toStage, p_note: note });
+        if (error) throw error; return data;
+      },
       async reject(appId, reason, notify) {
         await this.moveStage(appId, 7, reason);
         if (!notify) return {};
@@ -419,6 +423,7 @@
           emails: emails.filter(e => e.application_id === aid) };
       },
       async resumeUrl() { return null; },
+      async addRoundNote(aid, from, to, note) { activity.push({ id: id('act'), application_id: aid, action: 'round_note', from_stage: from, to_stage: to, note, created_at: iso(Date.now() + 1) }); emit(); return { ok: true }; },
       async moveStage(aid, st, reason) {
         const a = applications.find(x => x.id === aid);
         activity.push({ id: id('act'), application_id: aid, action: 'stage_changed', from_stage: a.stage_id, to_stage: st, note: reason || null, created_at: iso(Date.now()) });

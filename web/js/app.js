@@ -240,6 +240,22 @@
   const ivState = c => !STAGE_ROUND[c.stage_id] ? null
     : c.interview_at && new Date(c.interview_at) > Date.now() ? 'booked'
     : (c.iscore_round != null || c.interview_done_at) ? 'done' : c.interview_at ? 'booked' : null;
+  // Moving a candidate on from a round: ask how that round's interview went. Resolves { note } to go ahead, or null if cancelled.
+  function roundNoteFlow(name, fromStage, toStage) {
+    const n = STAGE_ROUND[fromStage];
+    if (!n || toStage === 7 || posOf(toStage) <= posOf(fromStage)) return Promise.resolve({ note: '' });
+    return new Promise(done => {
+      const m = modal(`How did Round ${n} go?`, `<p class="small muted" style="margin:0 0 10px">${esc(name || 'This candidate')} is moving from <b>${esc(stageName(fromStage))}</b> to <b>${esc(stageName(toStage))}</b>. Add notes on the Round ${n} interview for whoever runs the next step. They're saved on the candidate's activity.</p>
+        <div class="field"><label for="rnn">Interview notes <span class="muted">(optional)</span></label><textarea class="input" id="rnn" rows="6" maxlength="4000" placeholder="e.g. Strong on outbound plays, explained their Clay workflow clearly. Probe pricing objections in the next round."></textarea></div>`,
+        `<button class="btn" data-close>Cancel</button><button class="btn ghost" id="rnskip">Move without notes</button><button class="btn primary" id="rngo">Save notes &amp; move</button>`);
+      let settled = false; const finish = v => { if (settled) return; settled = true; m.close(); done(v); };
+      $('#rnskip', m.el).onclick = () => finish({ note: '' });
+      $('#rngo', m.el).onclick = () => { const t = $('#rnn', m.el).value.trim(); if (!t) return toast('Write a note, or choose "Move without notes".', true); finish({ note: t }); };
+      $('#rnn', m.el).onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('#rngo', m.el).click(); };
+      new MutationObserver((_, o) => { if (!document.body.contains(m.el)) { o.disconnect(); if (!settled) { settled = true; done(null); } } }).observe(document.body, { childList: true });
+    });
+  }
+  async function saveRoundNote(id, from, to, note) { if (!note) return; try { await api.addRoundNote(id, from, to, note); } catch (e) { toast('Moved, but the notes could not be saved: ' + e.message, true); } }
   // Interviewer recommendation on the pipeline card: green for yes, orange for hold, red for no
   const REC_LABEL = { strong_yes: 'Strong yes', yes: 'Yes', hold: 'Hold', maybe: 'Hold', no: 'No', strong_no: 'Strong no' };
   const recCls = r => ({ strong_yes: 'rec-yes', yes: 'rec-yes', hold: 'rec-hold', maybe: 'rec-hold', no: 'rec-no', strong_no: 'rec-no' })[r] || '';
@@ -755,7 +771,9 @@
           const id = e.dataTransfer.getData('text/plain'); const st = +col.dataset.stage;
           if (st === 7) return rejectFlow(id, draw);
           const card = cards.find(c => c.id === id); if (card && card.stage_id === st) return;
+          const rn = card ? await roundNoteFlow(card.full_name, card.stage_id, st) : { note: '' }; if (!rn) return;
           try { await api.moveStage(id, st); } catch (er) { return fail(er); }
+          await saveRoundNote(id, card?.stage_id, st, rn.note);
           if (STAGE_ROUND[st]) { const rd = job?.rounds?.[STAGE_ROUND[st] - 1];
             rd?.interviewer_id ? toast(`Moved to ${stageName(st)}. The candidate is being emailed a link to book a time.`)
               : toast(`Moved to ${stageName(st)}. No booking email was sent: set up Round ${STAGE_ROUND[st]} under the job's Panel and rounds tab.`, true); }
@@ -1043,7 +1061,7 @@
         <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}
         <div class="iv-rec" data-recbox="${i.id}">${i.recording_url ? `<a class="btn sm" href="${esc(i.recording_url)}" target="_blank" rel="noopener">${icon('file', 14)}Recording ↗</a>` : ''}${canAct && i.status !== 'cancelled' ? `<button class="btn sm ghost" data-rec="${i.id}">${i.recording_url ? 'Change' : '+ Recording link'}</button>` : ''}</div></div>
         ${i.status === 'scheduled' ? `<button class="btn sm" data-score="${i.id}">Scorecard</button>` : ''}</div>`).join('')}</div></div>` : ''}
-      <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
+      <div class="card"><div class="card-h"><h3>Activity</h3></div><div class="card-b timeline">${[...a.activity.map(x => ({ t: x.created_at, txt: x.action === 'applied' ? 'Application received' : x.action === 'screened' ? `AI screening complete${x.note ? ' · ' + x.note : ''}` : x.action === 'screening_failed' ? `AI screening could not finish${x.note ? ' · ' + x.note : ''}` : x.action === 'interview_booked' ? `Candidate booked an interview${x.note ? ' · ' + x.note : ''}` : x.action === 'round_note' ? `Round ${STAGE_ROUND[x.from_stage] || ''} interview notes: ${x.note || ''}` : x.action === 'email_skipped' ? (x.note || 'Email not sent') : !x.to_stage ? `${x.action.replace(/_/g, ' ')}${x.note ? ' · ' + x.note : ''}` : `Moved ${x.from_stage ? stageName(x.from_stage) + ' → ' : 'to '}${stageName(x.to_stage)}${x.note ? ` · ${x.note}` : ''}` })),
           ...a.emails.map(m => ({ t: m.sent_at, txt: `${m.status === 'failed' ? 'Email NOT sent' : 'Email sent'}: ${mailName(m.template_key)}${m.template_key === 'interviewer_notice' && m.to_email ? ' (' + m.to_email + ')' : ''}` }))].sort((p, q) => q.t.localeCompare(p.t))
           .map(x => `<div class="tl"><i></i><div><div>${esc(x.txt)}</div><div class="small muted">${new Date(x.t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div></div></div>`).join('')}</div></div>`;
   }
@@ -1053,7 +1071,9 @@
     fillFx(root);
     const again = () => { render(); state.redraw?.(); };
     const mv = $('#mv', root);
-    if (mv) mv.onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, again); } try { await api.moveStage(id, st); toast(`Moved to ${stageName(st)}`); again(); } catch (er) { fail(er); } };
+    if (mv) mv.onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, again); }
+      const rn = await roundNoteFlow(c.full_name, a.stage_id, st); if (!rn) { e.target.value = String(a.stage_id); return; }
+      try { await api.moveStage(id, st); await saveRoundNote(id, a.stage_id, st, rn.note); toast(`Moved to ${stageName(st)}${rn.note ? ' · notes saved' : ''}`); again(); } catch (er) { fail(er); } };
     const sch = $('#sched', root); if (sch) sch.onclick = () => scheduleFlow(id, STAGE_ROUND[a.stage_id] ? a.stage_id : 3, again);
     $$('[data-copyphone]', root).forEach(b => b.onclick = async () => toast(await copyText(b.dataset.copyphone) ? 'Phone number copied' : b.dataset.copyphone));
     const cpl = $('#cplink', root);
