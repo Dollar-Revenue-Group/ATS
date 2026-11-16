@@ -1478,6 +1478,20 @@
       <label class="row" style="gap:8px"><input type="checkbox" id="rn" checked> Send the rejection email to the candidate</label>`,
       `<button class="btn" data-close>Cancel</button><button class="btn danger solid" id="go">Reject</button>`);
     $('#rr', m.el).focus();
+    const REJ_TEXT = {
+      'Does not meet a must-have': 'After reviewing your application, we found that your profile does not meet one of the key requirements for this role.',
+      'Not enough relevant experience': 'We are looking for someone with more hands-on experience directly related to this role at this time.',
+      'Another candidate was a better fit': 'We had many strong applicants and have decided to move forward with a candidate whose experience more closely matches our current needs.',
+      'Did not pass the interview': 'Thank you for your time in the interview. We have decided not to move forward, as we are looking for a closer match for this role.',
+      'Salary expectations do not match': 'Unfortunately, your salary expectations are outside the range we have set for this role.',
+      'Candidate withdrew': 'As you have chosen to withdraw from the process, we have closed your application. Thank you for your interest.',
+      'Other': ''
+    };
+    let autoText = '';
+    $('#rr', m.el).onchange = () => { const rd = $('#rd', m.el), cur = rd.value.trim();
+      if (cur && cur !== autoText) return; // keep what the user wrote
+      autoText = REJ_TEXT[$('#rr', m.el).value] || ''; rd.value = autoText;
+      if ($('#rr', m.el).value === 'Other') rd.focus(); };
     $('#go', m.el).onclick = async () => { const go = $('#go', m.el), err = $('#rerr', m.el);
       const type = $('#rr', m.el).value, detail = $('#rd', m.el).value.trim();
       if (!type) { err.textContent = 'Please choose a reason type.'; return $('#rr', m.el).focus(); }
