@@ -880,3 +880,17 @@ body.col-resizing{cursor:col-resize;user-select:none}
 .rec-tag.rec-hold{--rc:var(--rec-hold)}.rec-tag.rec-no{--rc:var(--rec-no)}
 .legend-rec{font-weight:600}
 .timeline .tl>div>div:first-child{white-space:pre-wrap}
+
+/* Card colours v2: booked = purple, interview done (not scored) = green; scored cards use the recommendation colours */
+:root{--booked:#7C3AED;--booked-soft:rgba(124,58,237,.10);--done:#15803D;--done-soft:rgba(21,128,61,.10)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--booked:#A78BFA;--booked-soft:rgba(167,139,250,.14);--done:#4ADE80;--done-soft:rgba(74,222,128,.12)}}
+:root[data-theme="dark"]{--booked:#A78BFA;--booked-soft:rgba(167,139,250,.14);--done:#4ADE80;--done-soft:rgba(74,222,128,.12)}
+.kcard.booked{border-color:var(--booked);box-shadow:inset 4px 0 0 var(--booked);background:linear-gradient(0deg,var(--booked-soft),var(--booked-soft)),var(--surface)}
+.board .kcard.booked:hover{border-color:var(--booked)}
+.booked-tag{color:var(--booked);background:var(--booked-soft)}
+.booked-tag.past{background:var(--surface-2);color:var(--muted)}
+.legend-booked{color:var(--booked)}
+/* Interview done (not scored yet) = orange */
+:root{--done:#EA580C;--done-soft:rgba(234,88,12,.10)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--done:#FB923C;--done-soft:rgba(251,146,60,.13)}}
+:root[data-theme="dark"]{--done:#FB923C;--done-soft:rgba(251,146,60,.13)}
