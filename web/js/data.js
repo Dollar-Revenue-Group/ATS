@@ -322,7 +322,9 @@
       resumes.push({ id: rid, file_name: fileName, storage_path: `demo/${fileName}`, uploaded_at: iso(created) });
       const status = score == null ? 'screening' : stage === 7 ? 'rejected' : stage === 6 ? 'hired' : stage > 2 ? 'active' : 'screened';
       applications.push({ id: aid, job_id: jobId, candidate_id: cid, resume_id: rid, stage_id: stage, status, created_at: iso(created), updated_at: iso(created + day),
-        rejection_reason: stage === 7 ? 'Does not meet the must-have experience' : null });
+        rejection_reason: stage === 7 ? 'Does not meet the must-have experience' : null,
+        form_answers: i % 4 === 3 ? [] : [{ id: 'current_ctc', type: 'text', label: 'Current CTC', value: ['6 LPA', '45000 INR / month', '$1,800', '0', '9,00,000'][i % 5] },
+          { id: 'expected_ctc', type: 'text', label: 'Expected CTC', value: ['9 LPA', '60000 - 70000 INR / month', '$2,400', '30000 INR / month', '12,00,000'][i % 5] }] });
       activity.push({ id: id('act'), application_id: aid, action: 'applied', to_stage: 1, created_at: iso(created) });
       if (score != null) {
         const job = jobs.find(j => j.id === jobId); const r = job.rules;
@@ -373,6 +375,7 @@
       const c = candidates.find(x => x.id === a.candidate_id) || {}; const r = resumes.find(x => x.id === a.resume_id) || {};
       const s = screenings.filter(x => x.application_id === a.id).sort((p, q) => q.created_at.localeCompare(p.created_at))[0] || {};
       return { id: a.id, job_id: a.job_id, stage_id: a.stage_id, status: a.status, created_at: a.created_at, updated_at: a.updated_at, candidate_id: a.candidate_id,
+        pay_current: (a.form_answers || []).find(q => /current/i.test(q.label)) || null, pay_expected: (a.form_answers || []).find(q => /expect/i.test(q.label)) || null, phone: c.phone,
         full_name: c.full_name || (r.file_name || 'New applicant').replace(/\.(pdf|docx)$/i, '').replace(/[_-]+/g, ' '), email: c.email, total_exp_years: c.total_exp_years, source: c.source, file_name: r.file_name,
         score: s.score ?? null, verdict: s.verdict ?? null, summary: s.summary ?? null,
         ...(() => { const xs = iscores.filter(x => x.application_id === a.id && x.score != null); return xs.length ? { iscore: Math.round(xs.reduce((t, x) => t + +x.score, 0) / xs.length), iscore_n: xs.length } : {}; })(),

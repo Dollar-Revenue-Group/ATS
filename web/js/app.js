@@ -725,7 +725,7 @@
     try { bv = Object.assign(bv, JSON.parse(localStorage.getItem(BV_KEY) || '{}')); } catch (e) { /* defaults */ }
     const saveBv = () => { try { localStorage.setItem(BV_KEY, JSON.stringify(bv)); } catch (e) { /* storage off */ } };
     const colW = id => Math.max(180, Math.min(620, bv.w[id] || bv.def));
-    el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Purple cards</span> have an interview booked; <span class="legend-done">orange cards</span> have finished this round's interview but aren't scored yet. After scoring, the card shows the interviewer's call: <span class="legend-rec" style="color:var(--rec-yes)">green</span> yes, <span class="legend-rec" style="color:var(--rec-hold)">orange</span> hold, <span class="legend-rec" style="color:var(--rec-no)">red</span> no.</p></div>
+    el.innerHTML = `<div class="page-head"><div><h1>Pipeline</h1><p>Drag a candidate to move them. Moving someone into a round emails them a link to book a time with that round's interviewer. <span class="legend-booked">Purple cards</span> have an interview booked; <span class="legend-done">orange cards</span> have finished this round's interview but aren't scored yet. After scoring, the card shows the interviewer's call: <span class="legend-rec" style="color:var(--rec-yes)">green</span> yes, <span class="legend-rec" style="color:var(--rec-hold)">orange</span> hold, <span class="legend-rec" style="color:var(--rec-no)">red</span> no. Top right of a card: <span class="legend-pay-cur">blue</span> is current pay, <span class="legend-pay-exp">teal</span> is expected pay, both in US dollars a month.</p></div>
       <div class="board-tools"><button class="btn sm" id="copylinks" aria-haspopup="menu">${icon('cal', 15)}Copy booking link ▾</button><select class="input" id="jobsel" style="width:auto;min-width:260px" aria-label="Job">${jobs.map(j => `<option value="${j.id}" ${j.id === jobId ? 'selected' : ''}>${esc(j.title)}</option>`).join('')}</select>
         <div class="seg" role="group" aria-label="Filter by verdict">${[['all', 'All'], ['pass', 'Pass'], ['review', 'Review'], ['disqualified', 'Disq.'], ['low_fit', 'Low fit']].map(([k, l]) => `<button data-f="${k}" class="${filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="seg" role="group" aria-label="Sort"><button data-s="score" class="on">Top score</button><button data-s="iscore">Interview score</button><button data-s="new">Newest</button></div>
@@ -747,9 +747,10 @@
         if (shut) return `<section class="col shut" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'}"><button class="col-open" data-coltog="${s.id}" title="Show ${esc(s.name)}" aria-label="Show ${esc(s.name)}"><span class="col-dot"></span><span class="n">${list.length}</span><span class="col-vt">${esc(s.name)}</span></button></section>${ci < cols.length - 1 ? '<div class="col-gap"></div>' : ''}`;
         return `<section class="col" data-stage="${s.id}" aria-label="${s.name}" style="--stage:${STAGE_HUE[s.id] || '#8A8A8A'};width:${colW(s.id)}px"><div class="col-h"><span class="col-t"><span class="col-dot"></span><span>${s.name}${rd?.name ? `<span class="small muted" style="display:block;font-weight:500">${esc(rd.name)}</span>` : ''}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button class="col-copy" data-coltog="${s.id}" title="Collapse ${esc(s.name)}" aria-label="Collapse ${esc(s.name)}"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4 6 8l4 4"/></svg></button>${STAGE_ROUND[s.id] && rd ? `<button class="col-copy" data-colcopy="${STAGE_ROUND[s.id]}" title="Copy the Round ${STAGE_ROUND[s.id]} booking link" aria-label="Copy the Round ${STAGE_ROUND[s.id]} booking link">${icon('copy', 14)}</button>` : ''}<span class="n">${list.length}</span></span></div>
           <div class="col-b">${list.map(c => `<article class="kcard${recCls(curRec(c)) ? ' ' + recCls(curRec(c)) : ivState(c) === 'done' ? ' done' : c.interview_at ? ' booked' : ''}" draggable="${bv.pan ? 'false' : 'true'}" data-card="${c.id}" tabindex="0">
-            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b title="${esc(c.full_name)}">${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div><a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
+            <div class="top">${ring(c.score, c.verdict, 38)}<div class="grow"><b title="${esc(c.full_name)}">${esc(c.full_name)}</b><span class="small muted">${c.total_exp_years != null ? c.total_exp_years + ' yrs · ' : ''}${ago(c.created_at)}</span></div>${payBlocks(c.pay_current, c.pay_expected, c.phone, 'kc-pay')}<a class="kc-open" href="${esc(profileUrl(c.id))}" target="_blank" rel="noopener" draggable="false" title="Open full page in a new tab" aria-label="Open ${esc(c.full_name)} in a new tab"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 4 12"/></svg></a></div>
             ${ivState(c) === 'done' ? doneTag(c) : c.interview_at ? `<div class="booked-tag${new Date(c.interview_at) < Date.now() ? ' past' : ''}">${icon('cal', 13)}<span><b>${new Date(c.interview_at) < Date.now() ? 'Interviewed' : 'Booked'} ${fmtDate(c.interview_at)}</b>${fmtTime(c.interview_at)} ${tzShort(c.interview_at)}${c.interviewer_name ? `<br>with ${esc(c.interviewer_name)}` : ''}</span></div>` : STAGE_ROUND[c.stage_id] ? '<div class="wait-tag">Waiting for the candidate to book</div>' : ''}<div class="row" style="justify-content:space-between">${chip(c)}${c.iscore != null ? iscoreBadge(c.iscore, ivVerdictOf(scfg, c.iscore), false, c.iscore_n > 1 ? `Interview · ${c.iscore_n}` : 'Interview') : c.source === 'careers_page' ? '<span class="tag">Careers page</span>' : ''}</div>${recTag(c) ? `<div class="row" style="gap:6px">${recTag(c)}</div>` : ''}
           </article>`).join('') || '<div class="col-empty">Drop a candidate here</div>'}</div></section>${ci < cols.length - 1 ? `<div class="col-rs" data-rs="${s.id}" role="separator" aria-orientation="vertical" aria-label="Resize ${esc(s.name)}" tabindex="0" title="Drag to widen or narrow ${esc(s.name)} · double-click to reset"><span class="col-grip"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4 1 8l4 4M11 4l4 4-4 4"/></svg></span></div>` : ''}`; }).join('');
+      fillPay($('#board'));
       // Resize: drag the ⇔ handle to the right of a column (arrow keys work too); double-click resets it
       $$('[data-rs]').forEach(h => { const id = +h.dataset.rs, col = h.previousElementSibling;
         const setW = w => { w = Math.max(180, Math.min(620, Math.round(w))); col.style.width = w + 'px'; bv.w[id] = w; };
@@ -1033,6 +1034,48 @@
     if (allUsd) return paint({});
     fxRates().then(fx => paint(fx.rates)).catch(() => els.forEach(el => { if (el.dataset.fxCur === 'USD') paint({}); else { el.textContent = '(USD rate unavailable right now)'; el.classList.add('muted', 'small'); } }));
   }
+  /* Current / expected pay as US dollars a month. Handles "450k - 500k PKR / month", "$1100 to $1200", "₹9.5 LPA", "0" … */
+  function payParse(raw, label, phone) {
+    let v = String(raw || '').trim(); if (!v || v.length > 200) return null;
+    if (/^\s*(usd|pkr|inr|\$)?\s*0+\s*(usd|pkr|inr|\$)?\s*$/i.test(v)) return { zero: true };
+    v = v.replace(/^[^\d$₹€£]*?\bctc\s*:\s*/i, '').replace(/\(.*?\)/g, ' ').replace(/\bor\b.*$/i, ' ');
+    let per = null;
+    if (/\b(per\s*month|monthly|a month|p\.?\s?m\.?)\b|\/\s*(month|mo|m)\b/i.test(v)) per = 'month';
+    if (/\b(per\s*an+um|per\s*year|annual(ly)?|yearly|p\.?\s?a\.?|lpa|a year)\b|\/\s*(year|yr|y|an+um)\b/i.test(v)) per = per || 'year';
+    v = v.replace(/\busdt\b|\bus\s*dollars?\b|\bdollars?\b/ig, ' USD ').replace(/\bpkrs\b/ig, 'PKR').replace(/\b(pkr|inr|usd)\s*:/ig, '$1 ').replace(/\brs\s*[:.]\s*/ig, 'rs ')
+      .replace(/(\d)\s*rs\b/ig, '$1 rs').replace(/\+/g, ' ').replace(/\b(around|about|approx\.?|approximately|negotiable)\b/ig, ' ')
+      .replace(/\b(per\s*(month|an+um|year)|monthly|annual(ly)?|yearly|a month|a year)\b/ig, ' ');
+    const main = v.split('/').find(x => /\d/.test(x)); if (!main) return null;
+    const parts = main.split(/\s*(?:–|-|\bto\b)\s*(?=[^\d]{0,6}\d)/i).map(x => x.trim()).filter(Boolean).slice(0, 2);
+    const tail = per ? ' / ' + per : '';
+    const one = (txt, cand) => moneyOf({ type: 'money', label, value: txt.replace(/([\d.])([a-z]{3}|[$₹€£])$/i, '$1 $2') + tail }, cand);
+    let lo = one(parts[0], null), hi = parts[1] ? one(parts[1], null) : null;      // currency as written
+    if (lo && !hi && parts[1]) hi = one(parts[1] + ' ' + lo.cur, null);
+    if (hi && !lo) lo = one(parts[0] + ' ' + hi.cur, null);
+    if (!lo) { lo = one(parts[0], { phone }); if (lo && parts[1]) hi = one(parts[1] + ' ' + lo.cur, null); }   // no currency: go by phone country
+    if (!lo) return null;
+    return { lo: lo.amount, hi: hi && hi.cur === lo.cur && hi.amount > lo.amount ? hi.amount : null, cur: lo.cur, per: lo.per || per };
+  }
+  const payAttrs = (q, phone, kind) => { const x = q && payParse(q.value, q.label, phone); if (!x) return '';
+    return `<span class="pay ${kind}" data-pay="${esc(JSON.stringify(x))}" data-pay-kind="${kind}" data-pay-ans="${esc(q.value)}"></span>`; };
+  const usdK = n => '$' + Math.round(n).toLocaleString('en-US');
+  function fillPay(root, withLabel) {
+    const els = $$('[data-pay]', root); if (!els.length) return;
+    const paint = rates => els.forEach(el => { let x; try { x = JSON.parse(el.dataset.pay); } catch (e) { return; }
+      const kind = el.dataset.payKind === 'exp' ? 'Expected' : 'Current';
+      let txt, yr = '';
+      if (x.zero) txt = '$0';
+      else { const a = monthlyUsd(x.lo, x.cur, x.per, rates); if (!a) { el.remove(); return; }
+        const b = x.hi ? monthlyUsd(x.hi, x.cur, x.per, rates) : null;
+        txt = usdK(a.month) + (b ? '–' + Math.round(b.month).toLocaleString('en-US') : ''); yr = ` · about ${usdK(a.year)}${b ? '–' + Math.round(b.year).toLocaleString('en-US') : ''} a year`; }
+      el.textContent = withLabel ? `${kind} ${txt}/mo` : txt;
+      el.title = `${kind} pay: ${txt} a month${yr}. They wrote: "${el.dataset.payAns}"`; el.classList.add('on'); });
+    if (els.every(el => { try { const x = JSON.parse(el.dataset.pay); return x.zero || x.cur === 'USD'; } catch (e) { return true; } })) return paint({});
+    fxRates().then(fx => paint(fx.rates)).catch(() => els.forEach(el => el.remove()));
+  }
+  const payBlocks = (cur, exp, phone, cls) => { const h = payAttrs(cur, phone, 'cur') + payAttrs(exp, phone, 'exp'); return h ? `<div class="${cls}">${h}</div>` : ''; };
+  const payOfApp = a => { const f = a.form_answers || []; const pick = re => f.find(q => re.test(q.label || '') && String(q.value || '').trim() && (q.type === 'money' || /ctc|salary|compensation|pay|package|income/i.test(q.label || '')));
+    return { cur: pick(/current/i), exp: pick(/expect/i) }; };
   function candidateBody(a, iscores, canAct, mode) {
     const c = a.candidates || {}; const sc = a.screening; const failed = failedMailsOf(a);
     return `${mode === 'page' ? '' : scoringCard(a, iscores)}
@@ -1040,15 +1083,6 @@
         ${failed.map(m => `<div class="row" style="justify-content:space-between;gap:8px"><span class="small">${esc(mailName(m.template_key))} · ${new Date(m.sent_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
           ${m.template_key === 'interviewer_notice' ? '' : `<button class="btn sm" data-resend="${esc(m.template_key)}">Send again</button>`}</div>`).join('')}
         <span class="small muted">Usually this means Gmail needs reconnecting in n8n. Once it is fixed, click Send again.</span></div>` : ''}
-      ${sc ? `<div class="card card-b ai-sum" style="--v:${VCOLOR[sc.verdict]}"><div class="row" style="gap:8px">${icon('spark', 16)}<span class="eyebrow">AI summary</span></div><p class="prose">${esc(sc.summary)}</p>
-          <div class="small muted">Scored ${ago(sc.created_at)} · ${esc(sc.model || '')}</div></div>
-        <div class="card"><div class="card-h"><h3>Must-haves</h3></div><div class="card-b">${(sc.disqualifier_results || []).map(d => {
-          const col = d.result === 'met' ? 'var(--pass)' : d.result === 'not_met' ? 'var(--disq)' : 'var(--review)';
-          return `<div class="check"><span class="dot" style="background:${col}">${d.result === 'met' ? '✓' : d.result === 'not_met' ? '✕' : '?'}</span><div><b>${esc(d.rule || d.id)}</b> <span class="small" style="color:${col};font-weight:600">${d.result.replace('_', ' ')}</span>${d.evidence ? `<div class="quote">${esc(d.evidence)}</div>` : ''}</div></div>`; }).join('') || '<span class="muted">No must-haves set.</span>'}</div></div>
-        <div class="card"><div class="card-h"><h3>Criteria</h3><span class="small muted">rating out of 10 · weight</span></div><div class="card-b">${(sc.factor_scores || []).map(f => `
-          <div class="fbar"><div class="row" style="justify-content:space-between"><b>${esc(f.name || f.id)}</b><span class="num small">${f.rating}/10 · ${f.weight}%</span></div>
-            <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
-        : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
       ${(a.form_answers || []).length || (a.attachments || []).length ? `<div class="card"><div class="card-h"><h3>Application answers</h3></div><div class="card-b" style="display:grid;gap:12px">
         ${(a.form_answers || []).map(q => { const m = moneyOf(q, c);
           return `<div><div class="small muted">${esc(q.label)}</div><div style="white-space:pre-wrap">${/^https?:\/\//i.test(q.value || '') ? `<a href="${esc(q.value)}" target="_blank" rel="noopener">${esc(q.value)} ↗</a>`
@@ -1060,6 +1094,15 @@
         ${(c.skills || []).length ? `<div class="row" style="gap:6px">${c.skills.map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>` : ''}
         ${(c.work_history || []).map(w => `<div class="wh"><b>${esc(w.title)}</b> · ${esc(w.company)} <span class="small muted">${esc(w.start || '')} – ${esc(w.end || '')}</span><div class="small muted">${esc(w.summary || '')}</div></div>`).join('')}
         ${(c.education || []).map(e => `<div class="small"><b>${esc(e.degree)}</b> · ${esc(e.institution)} ${esc(e.year || '')}</div>`).join('')}</div></div>` : ''}
+      ${sc ? `<div class="card card-b ai-sum" style="--v:${VCOLOR[sc.verdict]}"><div class="row" style="gap:8px">${icon('spark', 16)}<span class="eyebrow">AI summary</span></div><p class="prose">${esc(sc.summary)}</p>
+          <div class="small muted">Scored ${ago(sc.created_at)} · ${esc(sc.model || '')}</div></div>
+        <div class="card"><div class="card-h"><h3>Must-haves</h3></div><div class="card-b">${(sc.disqualifier_results || []).map(d => {
+          const col = d.result === 'met' ? 'var(--pass)' : d.result === 'not_met' ? 'var(--disq)' : 'var(--review)';
+          return `<div class="check"><span class="dot" style="background:${col}">${d.result === 'met' ? '✓' : d.result === 'not_met' ? '✕' : '?'}</span><div><b>${esc(d.rule || d.id)}</b> <span class="small" style="color:${col};font-weight:600">${d.result.replace('_', ' ')}</span>${d.evidence ? `<div class="quote">${esc(d.evidence)}</div>` : ''}</div></div>`; }).join('') || '<span class="muted">No must-haves set.</span>'}</div></div>
+        <div class="card"><div class="card-h"><h3>Criteria</h3><span class="small muted">rating out of 10 · weight</span></div><div class="card-b">${(sc.factor_scores || []).map(f => `
+          <div class="fbar"><div class="row" style="justify-content:space-between"><b>${esc(f.name || f.id)}</b><span class="num small">${f.rating}/10 · ${f.weight}%</span></div>
+            <div class="tr"><i style="width:${f.rating * 10}%;background:${f.rating >= 7 ? 'var(--pass)' : f.rating >= 5 ? 'var(--review)' : 'var(--low)'}"></i></div><div class="small muted">${esc(f.reason)}</div></div>`).join('')}</div></div>`
+        : `<div class="card card-b row">${a.status === 'screening_failed' ? 'The AI could not read this resume. Please review it manually or rescreen.' : '<span class="spin"></span> The AI is reading this resume. Results appear here automatically.'}</div>`}
       ${a.interviews?.length ? `<div class="card"><div class="card-h"><h3>Interviews</h3></div><div class="list">${a.interviews.map(i => `<div class="li" style="cursor:default"><div class="grow"><b>${stageName(i.stage_id)} · ${fmtDate(i.scheduled_at)} ${fmtTime(i.scheduled_at)}</b>
         <span class="small muted">${esc(ivWho(i))} · ${i.status}${i.rating ? ` · ${'★'.repeat(i.rating)} ${(i.recommendation || '').replace('_', ' ')}` : ''}</span>${i.feedback ? `<div class="quote">${esc(i.feedback)}</div>` : ''}
         <div class="iv-rec" data-recbox="${i.id}">${i.recording_url ? `<a class="btn sm" href="${esc(i.recording_url)}" target="_blank" rel="noopener">${icon('file', 14)}Recording ↗</a>` : ''}${canAct && i.status !== 'cancelled' ? `<button class="btn sm ghost" data-rec="${i.id}">${i.recording_url ? 'Change' : '+ Recording link'}</button>` : ''}</div></div>
@@ -1071,7 +1114,7 @@
   // Wires the stage select and action buttons; `hooks` decides how scoring opens (new tab from the drawer, the right panel on the full page)
   function bindCandidate(root, a, render, hooks) {
     const id = a.id, c = a.candidates || {};
-    fillFx(root);
+    fillFx(root); fillPay(root, true);
     const again = () => { render(); state.redraw?.(); };
     const mv = $('#mv', root);
     if (mv) mv.onchange = async e => { const st = +e.target.value; if (st === 7) { e.target.value = String(a.stage_id); return rejectFlow(id, again); }
@@ -1129,7 +1172,7 @@
         <div class="drawer-h">
           <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${avatar(name, 48)}
             <div style="flex:1;min-width:0"><h2>${esc(name)}</h2><div class="small muted">${esc(a.jobs?.title)} · ${stageName(a.stage_id)} · applied ${fmtDate(a.created_at)}</div>
-              <div class="row" style="margin-top:8px;gap:6px">${chip({ status: a.status, verdict: sc?.verdict })}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}</div></div>
+              <div class="row" style="margin-top:8px;gap:6px">${chip({ status: a.status, verdict: sc?.verdict })}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.linkedin_url ? `<a class="tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}${(p => payAttrs(p.cur, c.phone, 'cur') + payAttrs(p.exp, c.phone, 'exp'))(payOfApp(a))}</div></div>
             ${ring(sc?.score ?? null, sc?.verdict, 64)}<button class="x" data-close aria-label="Close">${icon('x', 20)}</button></div>
           <a class="btn sm open-full" href="${esc(profileUrl(id))}" target="_blank" rel="noopener" title="Resume on the left, details in the middle, interview scoring on the right">${icon('file', 15)}Open full page in a new tab ↗</a>
           ${c.phone ? phoneBlock(c.phone) : ''}
@@ -1349,7 +1392,7 @@
         <header class="cp-head">
           <div class="cp-id">${avatar(name, 56)}<div class="cp-who"><h1>${esc(name)}</h1>
             <div class="cp-sub">${esc(a.jobs?.title || '')}${a.jobs?.client ? ` <span class="chip ext">${esc(a.jobs.client)}</span>` : ''} · <b>${stageName(a.stage_id)}</b> · applied ${fmtDate(a.created_at)}</div>
-            <div class="row" style="gap:6px;margin-top:8px">${chip({ status: a.status, verdict: sc?.verdict })}${c.email ? `<a class="tag" href="mailto:${esc(c.email)}">${icon('mail', 13)}${esc(c.email)}</a>` : ''}${c.linkedin_url ? `<a class="tag li-tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}</div></div></div>
+            <div class="row" style="gap:6px;margin-top:8px">${chip({ status: a.status, verdict: sc?.verdict })}${c.email ? `<a class="tag" href="mailto:${esc(c.email)}">${icon('mail', 13)}${esc(c.email)}</a>` : ''}${c.linkedin_url ? `<a class="tag li-tag" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}${(p => payAttrs(p.cur, c.phone, 'cur') + payAttrs(p.exp, c.phone, 'exp'))(payOfApp(a))}${a.source === 'careers_page' ? '<span class="tag">Careers site</span>' : ''}</div></div></div>
           <div class="cp-scores"><div class="cp-score-box"><span class="eyebrow">AI score</span>${ring(sc?.score ?? null, sc?.verdict, 58)}</div>
             <div class="cp-score-box"><span class="eyebrow">Interview</span>${avg != null ? iscoreBadge(avg, ivVerdictOf(cfg, avg), true) : '<span class="small muted">Not scored yet</span>'}</div></div>
           ${c.phone ? `<div class="cp-phone">${phoneBlock(c.phone)}</div>` : ''}
@@ -1386,6 +1429,7 @@
       } else { resumeKey = null; resWrap = null; }
       questionsCard($('#iqcard', el), a);
       if (showScore) scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); });
+      if (!canAct) fillPay(el, true);
       if (canAct) bindCandidate(el, a, render, { score: o => { scoreOpts = o.interview ? { interviewId: o.interview.id } : o.existingId ? { existingId: o.existingId } : {}; if (!showScore) setSc(true); else scoringPanel($('#scbody', el), a, iscores, team, scoreOpts, () => { scoreOpts = {}; render(); }); $('.cp-scoring', el)?.scrollIntoView({ block: 'nearest' }); } });
     };
     await render();
